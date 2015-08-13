@@ -36,12 +36,12 @@ struct pcm_chip_
 //void PCM_Write_Reg(unsigned int Reg, unsigned int Data);
 //int  PCM_Update(int **buf, int Length);
 
-void rf5c164_update(UINT8 ChipID, stream_sample_t **outputs, int samples);
-int device_start_rf5c164(UINT8 ChipID, int clock);
-void device_stop_rf5c164(UINT8 ChipID);
-void device_reset_rf5c164(UINT8 ChipID);
-void rf5c164_w(UINT8 ChipID, offs_t offset, UINT8 data);
-void rf5c164_mem_w(UINT8 ChipID, offs_t offset, UINT8 data);
-void rf5c164_write_ram(UINT8 ChipID, offs_t DataStart, offs_t DataLength, const UINT8* RAMData);
+void rf5c164_update(void *chip, stream_sample_t **outputs, int samples);
+int device_start_rf5c164(void **chip, int clock, int CHIP_SAMPLING_MODE, int CHIP_SAMPLE_RATE);
+void device_stop_rf5c164(void *chip);
+void device_reset_rf5c164(void *chip);
+void rf5c164_w(void *chip, offs_t offset, UINT8 data);
+void rf5c164_mem_w(void *chip, offs_t offset, UINT8 data);
+void rf5c164_write_ram(void *chip, offs_t DataStart, offs_t DataLength, const UINT8* RAMData);
 
-void rf5c164_set_mute_mask(UINT8 ChipID, UINT32 MuteMask);
+void rf5c164_set_mute_mask(void *chip, UINT32 MuteMask);

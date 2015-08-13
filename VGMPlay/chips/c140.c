@@ -44,7 +44,7 @@ Unmapped registers:
 
 
 //#include "emu.h"
-#include <malloc.h>
+#include <stdlib.h>
 #include <memory.h>
 #include "mamedef.h"
 #include "c140.h"
@@ -112,12 +112,6 @@ struct _c140_state
 	VOICE voi[MAX_VOICE];
 };
 
-extern UINT8 CHIP_SAMPLING_MODE;
-extern INT32 CHIP_SAMPLE_RATE;
-
-#define MAX_CHIPS	0x02
-static c140_state C140Data[MAX_CHIPS];
-
 /*INLINE c140_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
@@ -140,10 +134,10 @@ static void init_voice( VOICE *v )
 	v->sample_loop=0;
 }
 //READ8_DEVICE_HANDLER( c140_r )
-UINT8 c140_r(UINT8 ChipID, offs_t offset)
+UINT8 c140_r(void *_info, offs_t offset)
 {
 	//c140_state *info = get_safe_token(device);
-	c140_state *info = &C140Data[ChipID];
+	c140_state *info = (c140_state *)_info;
 	offset&=0x1ff;
 	return info->REG[offset];
 }
@@ -213,10 +207,10 @@ static long find_sample(c140_state *info, long adrs, long bank, int voice)
 	return (newadr);
 }
 //WRITE8_DEVICE_HANDLER( c140_w )
-void c140_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void c140_w(void *_info, offs_t offset, UINT8 data)
 {
 	//c140_state *info = get_safe_token(device);
-	c140_state *info = &C140Data[ChipID];
+	c140_state *info = (c140_state *)_info;
 	//info->stream->update();
 
 	offset&=0x1ff;
@@ -277,10 +271,10 @@ void c140_w(UINT8 ChipID, offs_t offset, UINT8 data)
 }
 
 //void c140_set_base(device_t *device, void *base)
-void c140_set_base(UINT8 ChipID, void *base)
+void c140_set_base(void *_info, void *base)
 {
 	//c140_state *info = get_safe_token(device);
-	c140_state *info = &C140Data[ChipID];
+	c140_state *info = (c140_state *)_info;
 	info->pRom = base;
 }
 
@@ -292,10 +286,9 @@ void c140_set_base(UINT8 ChipID, void *base)
 }*/
 
 //static STREAM_UPDATE( update_stereo )
-void c140_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void c140_update(void *param, stream_sample_t **outputs, int samples)
 {
-	//c140_state *info = (c140_state *)param;
-	c140_state *info = &C140Data[ChipID];
+	c140_state *info = (c140_state *)param;
 	int		i,j;
 
 	INT32	rvol,lvol;
@@ -495,17 +488,15 @@ void c140_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
 }
 
 //static DEVICE_START( c140 )
-int device_start_c140(UINT8 ChipID, int clock, int banking_type)
+int device_start_c140(void **_info, int clock, int banking_type, int CHIP_SAMPLING_MODE, int CHIP_SAMPLE_RATE)
 {
 	//const c140_interface *intf = (const c140_interface *)device->static_config();
 	//c140_state *info = get_safe_token(device);
 	c140_state *info;
 	int i;
 
-	if (ChipID >= MAX_CHIPS)
-		return 0;
-	
-	info = &C140Data[ChipID];
+	info = (c140_state *) calloc(1, sizeof(c140_state));
+	*_info = (void *) info;
 	
 	//info->sample_rate=info->baserate=device->clock();
 	if (clock < 1000000)
@@ -552,23 +543,25 @@ int device_start_c140(UINT8 ChipID, int clock, int banking_type)
 	
 	for (i = 0; i < MAX_VOICE; i ++)
 		info->voi[i].Muted = 0x00;
-	
+
 	return info->sample_rate;
 }
 
-void device_stop_c140(UINT8 ChipID)
+void device_stop_c140(void *_info)
 {
-	c140_state *info = &C140Data[ChipID];
+	c140_state *info = (c140_state *)_info;
 	
 	free(info->pRom);	info->pRom = NULL;
 	free(info->mixer_buffer_left);
+
+	free(info);
 	
 	return;
 }
 
-void device_reset_c140(UINT8 ChipID)
+void device_reset_c140(void *_info)
 {
-	c140_state *info = &C140Data[ChipID];
+	c140_state *info = (c140_state *)_info;
 	int i;
 	
 	memset(info->REG, 0, sizeof(info->REG));
@@ -579,10 +572,10 @@ void device_reset_c140(UINT8 ChipID)
 	return;
 }
 
-void c140_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
+void c140_write_rom(void *_info, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
 					const UINT8* ROMData)
 {
-	c140_state *info = &C140Data[ChipID];
+	c140_state *info = (c140_state *)_info;
 	
 	if (info->pRomSize != ROMSize)
 	{
@@ -601,9 +594,9 @@ void c140_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t DataL
 }
 
 
-void c140_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
+void c140_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-	c140_state *info = &C140Data[ChipID];
+	c140_state *info = (c140_state *)_info;
 	UINT8 CurChn;
 	
 	for (CurChn = 0; CurChn < MAX_VOICE; CurChn ++)

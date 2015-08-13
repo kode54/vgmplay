@@ -18,6 +18,7 @@
 ******************************************************************************/
 #include <memory.h>
 
+#include <stdlib.h>
 #include "mamedef.h"
 //#include "attotime.h"
 //#include "sndintrf.h"
@@ -45,17 +46,11 @@ struct _ym3812_state
 	//sound_stream *	stream;
 	//emu_timer *		timer[2];
 	void *			chip;
+	int			EMU_CORE;
 	//const ym3812_interface *intf;
 	//const device_config *device;
 };
 
-
-extern UINT8 CHIP_SAMPLING_MODE;
-extern INT32 CHIP_SAMPLE_RATE;
-static UINT8 EMU_CORE = 0x00;
-
-#define MAX_CHIPS	0x02
-static ym3812_state YM3812Data[MAX_CHIPS];
 
 /*INLINE ym3812_state *get_safe_token(const device_config *device)
 {
@@ -103,11 +98,10 @@ static void TimerHandler(void *param,int c,int period)
 
 
 //static STREAM_UPDATE( ym3812_stream_update )
-void ym3812_stream_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void ym3812_stream_update(void *param, stream_sample_t **outputs, int samples)
 {
-	//ym3812_state *info = (ym3812_state *)param;
-	ym3812_state *info = &YM3812Data[ChipID];
-	switch(EMU_CORE)
+	ym3812_state *info = (ym3812_state *)param;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -120,12 +114,14 @@ void ym3812_stream_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
 	}
 }
 
+static stream_sample_t* DUMMYBUF[0x02] = {NULL, NULL};
+
 static void _stream_update(void * param/*, int interval*/)
 {
 	ym3812_state *info = (ym3812_state *)param;
 	//stream_update(info->stream);
 	
-	switch(EMU_CORE)
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -140,17 +136,24 @@ static void _stream_update(void * param/*, int interval*/)
 
 
 //static DEVICE_START( ym3812 )
-int device_start_ym3812(UINT8 ChipID, int clock)
+int device_start_ym3812(void **_info, int EMU_CORE, int clock, int CHIP_SAMPLING_MODE, int CHIP_SAMPLE_RATE)
 {
 	//static const ym3812_interface dummy = { 0 };
 	//ym3812_state *info = get_safe_token(device);
 	ym3812_state *info;
 	int rate;
+
+#ifdef ENABLE_ALL_CORES
+	if (EMU_CORE >= 0x02)
+		EMU_CORE = EC_DBOPL;
+#else
+	EMU_CORE = EC_DBOPL;
+#endif
 	
-	if (ChipID >= MAX_CHIPS)
-		return 0;
+	info = (ym3812_state *) calloc(1, sizeof(ym3812_state));
+	*_info = (void *) info;
 	
-	info = &YM3812Data[ChipID];
+	info->EMU_CORE = EMU_CORE;
 	rate = (clock & 0x7FFFFFFF)/72;
 	if ((CHIP_SAMPLING_MODE == 0x01 && rate < CHIP_SAMPLE_RATE) ||
 		CHIP_SAMPLING_MODE == 0x02)
@@ -182,16 +185,16 @@ int device_start_ym3812(UINT8 ChipID, int clock)
 		info->chip = adlib_OPL2_init(clock & 0x7FFFFFFF, rate, _stream_update, info);
 		break;
 	}
-	
+
 	return rate;
 }
 
 //static DEVICE_STOP( ym3812 )
-void device_stop_ym3812(UINT8 ChipID)
+void device_stop_ym3812(void *_info)
 {
 	//ym3812_state *info = get_safe_token(device);
-	ym3812_state *info = &YM3812Data[ChipID];
-	switch(EMU_CORE)
+	ym3812_state *info = (ym3812_state *)_info;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -202,14 +205,15 @@ void device_stop_ym3812(UINT8 ChipID)
 		adlib_OPL2_stop(info->chip);
 		break;
 	}
+	free(info);
 }
 
 //static DEVICE_RESET( ym3812 )
-void device_reset_ym3812(UINT8 ChipID)
+void device_reset_ym3812(void *_info)
 {
 	//ym3812_state *info = get_safe_token(device);
-	ym3812_state *info = &YM3812Data[ChipID];
-	switch(EMU_CORE)
+	ym3812_state *info = (ym3812_state *)_info;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -224,11 +228,11 @@ void device_reset_ym3812(UINT8 ChipID)
 
 
 //READ8_DEVICE_HANDLER( ym3812_r )
-UINT8 ym3812_r(UINT8 ChipID, offs_t offset)
+UINT8 ym3812_r(void *_info, offs_t offset)
 {
 	//ym3812_state *info = get_safe_token(device);
-	ym3812_state *info = &YM3812Data[ChipID];
-	switch(EMU_CORE)
+	ym3812_state *info = (ym3812_state *)_info;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -242,11 +246,11 @@ UINT8 ym3812_r(UINT8 ChipID, offs_t offset)
 }
 
 //WRITE8_DEVICE_HANDLER( ym3812_w )
-void ym3812_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void ym3812_w(void *_info, offs_t offset, UINT8 data)
 {
 	//ym3812_state *info = get_safe_token(device);
-	ym3812_state *info = &YM3812Data[ChipID];
-	switch(EMU_CORE)
+	ym3812_state *info = (ym3812_state *)_info;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -260,42 +264,31 @@ void ym3812_w(UINT8 ChipID, offs_t offset, UINT8 data)
 }
 
 //READ8_DEVICE_HANDLER( ym3812_status_port_r )
-UINT8 ym3812_status_port_r(UINT8 ChipID, offs_t offset)
+UINT8 ym3812_status_port_r(void *info, offs_t offset)
 {
-	return ym3812_r(ChipID, 0);
+	return ym3812_r(info, 0);
 }
 //READ8_DEVICE_HANDLER( ym3812_read_port_r )
-UINT8 ym3812_read_port_r(UINT8 ChipID, offs_t offset)
+UINT8 ym3812_read_port_r(void *info, offs_t offset)
 {
-	return ym3812_r(ChipID, 1);
+	return ym3812_r(info, 1);
 }
 //WRITE8_DEVICE_HANDLER( ym3812_control_port_w )
-void ym3812_control_port_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void ym3812_control_port_w(void *info, offs_t offset, UINT8 data)
 {
-	ym3812_w(ChipID, 0, data);
+	ym3812_w(info, 0, data);
 }
 //WRITE8_DEVICE_HANDLER( ym3812_write_port_w )
-void ym3812_write_port_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void ym3812_write_port_w(void *info, offs_t offset, UINT8 data)
 {
-	ym3812_w(ChipID, 1, data);
+	ym3812_w(info, 1, data);
 }
 
 
-void ym3812_set_emu_core(UINT8 Emulator)
+void ym3812_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-#ifdef ENABLE_ALL_CORES
-	EMU_CORE = (Emulator < 0x02) ? Emulator : 0x00;
-#else
-	EMU_CORE = EC_DBOPL;
-#endif
-	
-	return;
-}
-
-void ym3812_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
-{
-	ym3812_state *info = &YM3812Data[ChipID];
-	switch(EMU_CORE)
+	ym3812_state *info = (ym3812_state *)_info;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:

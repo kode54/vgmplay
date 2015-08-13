@@ -1,5 +1,7 @@
 // VGMPlay_AddFmts.c: C Source File for playback of additional non-VGM formats
 
+#ifdef ADDITIONAL_FORMATS
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -1149,3 +1151,5 @@ INLINE INT32 SamplePlayback2VGM(INT32 SampleVal)
 {
 	return (INT32)((INT64)SampleVal * VGMSampleRate / SampleRate);
 }
+
+#endif

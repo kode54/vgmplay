@@ -6,6 +6,7 @@
 
 ***************************************************************************/
 #include "mamedef.h"
+#include <stdlib.h>
 //#include "attotime.h"
 //#include "sndintrf.h"
 //#include "streams.h"
@@ -29,17 +30,11 @@ struct _ymf262_state
 	//sound_stream *	stream;
 	//emu_timer *		timer[2];
 	void *			chip;
+	int			EMU_CORE;
 	//const ymf262_interface *intf;
 	//const device_config *device;
 };
 
-
-extern UINT8 CHIP_SAMPLING_MODE;
-extern INT32 CHIP_SAMPLE_RATE;
-static UINT8 EMU_CORE = 0x00;
-
-#define MAX_CHIPS	0x02
-static ymf262_state YMF262Data[MAX_CHIPS];
 
 /*INLINE ymf262_state *get_safe_token(const device_config *device)
 {
@@ -86,11 +81,10 @@ static void timer_handler_262(void *param,int timer, int period)
 }
 
 //static STREAM_UPDATE( ymf262_stream_update )
-void ymf262_stream_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void ymf262_stream_update(void *param, stream_sample_t **outputs, int samples)
 {
-	//ymf262_state *info = (ymf262_state *)param;
-	ymf262_state *info = &YMF262Data[ChipID];
-	switch(EMU_CORE)
+	ymf262_state *info = (ymf262_state *)param;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -103,12 +97,14 @@ void ymf262_stream_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
 	}
 }
 
+static stream_sample_t* DUMMYBUF[0x02] = {NULL, NULL};
+
 static void _stream_update(void *param/*, int interval*/)
 {
 	ymf262_state *info = (ymf262_state *)param;
 	//stream_update(info->stream);
 	
-	switch(EMU_CORE)
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -123,17 +119,24 @@ static void _stream_update(void *param/*, int interval*/)
 
 
 //static DEVICE_START( ymf262 )
-int device_start_ymf262(UINT8 ChipID, int clock)
+int device_start_ymf262(void **_info, int EMU_CORE, int clock, int CHIP_SAMPLING_MODE, int CHIP_SAMPLE_RATE)
 {
 	//static const ymf262_interface dummy = { 0 };
 	//ymf262_state *info = get_safe_token(device);
 	ymf262_state *info;
 	int rate;
+
+#ifdef ENABLE_ALL_CORES
+	if (EMU_CORE >= 0x02)
+		EMU_CORE = EC_DBOPL;
+#else
+	EMU_CORE = EC_DBOPL;
+#endif
 	
-	if (ChipID >= MAX_CHIPS)
-		return 0;
+	info = (ymf262_state *) calloc(1, sizeof(ymf262_state));
+	*_info = (void *) info;
 	
-	info = &YMF262Data[ChipID];
+	info->EMU_CORE = EMU_CORE;
 	rate = clock/288;
 	if ((CHIP_SAMPLING_MODE == 0x01 && rate < CHIP_SAMPLE_RATE) ||
 		CHIP_SAMPLING_MODE == 0x02)
@@ -166,16 +169,16 @@ int device_start_ymf262(UINT8 ChipID, int clock)
 		info->chip = adlib_OPL3_init(clock, rate, _stream_update, info);
 		break;
 	}
-	
+
 	return rate;
 }
 
 //static DEVICE_STOP( ymf262 )
-void device_stop_ymf262(UINT8 ChipID)
+void device_stop_ymf262(void *_info)
 {
 	//ymf262_state *info = get_safe_token(device);
-	ymf262_state *info = &YMF262Data[ChipID];
-	switch(EMU_CORE)
+	ymf262_state *info = (ymf262_state *)_info;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -186,15 +189,16 @@ void device_stop_ymf262(UINT8 ChipID)
 		adlib_OPL3_stop(info->chip);
 		break;
 	}
+	free(info);
 }
 
 /* reset */
 //static DEVICE_RESET( ymf262 )
-void device_reset_ymf262(UINT8 ChipID)
+void device_reset_ymf262(void *_info)
 {
 	//ymf262_state *info = get_safe_token(device);
-	ymf262_state *info = &YMF262Data[ChipID];
-	switch(EMU_CORE)
+	ymf262_state *info = (ymf262_state *)_info;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -209,11 +213,11 @@ void device_reset_ymf262(UINT8 ChipID)
 
 
 //READ8_DEVICE_HANDLER( ymf262_r )
-UINT8 ymf262_r(UINT8 ChipID, offs_t offset)
+UINT8 ymf262_r(void *_info, offs_t offset)
 {
 	//ymf262_state *info = get_safe_token(device);
-	ymf262_state *info = &YMF262Data[ChipID];
-	switch(EMU_CORE)
+	ymf262_state *info = (ymf262_state *)_info;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -227,11 +231,11 @@ UINT8 ymf262_r(UINT8 ChipID, offs_t offset)
 }
 
 //WRITE8_DEVICE_HANDLER( ymf262_w )
-void ymf262_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void ymf262_w(void *_info, offs_t offset, UINT8 data)
 {
 	//ymf262_state *info = get_safe_token(device);
-	ymf262_state *info = &YMF262Data[ChipID];
-	switch(EMU_CORE)
+	ymf262_state *info = (ymf262_state *)_info;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -245,47 +249,36 @@ void ymf262_w(UINT8 ChipID, offs_t offset, UINT8 data)
 }
 
 //READ8_DEVICE_HANDLER ( ymf262_status_r )
-UINT8 ymf262_status_r(UINT8 ChipID, offs_t offset)
+UINT8 ymf262_status_r(void *info, offs_t offset)
 {
-	return ymf262_r(ChipID, 0);
+	return ymf262_r(info, 0);
 }
 //WRITE8_DEVICE_HANDLER( ymf262_register_a_w )
-void ymf262_register_a_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void ymf262_register_a_w(void *info, offs_t offset, UINT8 data)
 {
-	ymf262_w(ChipID, 0, data);
+	ymf262_w(info, 0, data);
 }
 //WRITE8_DEVICE_HANDLER( ymf262_register_b_w )
-void ymf262_register_b_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void ymf262_register_b_w(void *info, offs_t offset, UINT8 data)
 {
-	ymf262_w(ChipID, 2, data);
+	ymf262_w(info, 2, data);
 }
 //WRITE8_DEVICE_HANDLER( ymf262_data_a_w )
-void ymf262_data_a_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void ymf262_data_a_w(void *info, offs_t offset, UINT8 data)
 {
-	ymf262_w(ChipID, 1, data);
+	ymf262_w(info, 1, data);
 }
 //WRITE8_DEVICE_HANDLER( ymf262_data_b_w )
-void ymf262_data_b_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void ymf262_data_b_w(void *info, offs_t offset, UINT8 data)
 {
-	ymf262_w(ChipID, 3, data);
+	ymf262_w(info, 3, data);
 }
 
 
-void ymf262_set_emu_core(UINT8 Emulator)
+void ymf262_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-#ifdef ENABLE_ALL_CORES
-	EMU_CORE = (Emulator < 0x02) ? Emulator : 0x00;
-#else
-	EMU_CORE = EC_DBOPL;
-#endif
-	
-	return;
-}
-
-void ymf262_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
-{
-	ymf262_state *info = &YMF262Data[ChipID];
-	switch(EMU_CORE)
+	ymf262_state *info = (ymf262_state *)_info;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:

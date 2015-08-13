@@ -10,22 +10,17 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <malloc.h>
+#include <stdlib.h>
 
 #include "mamedef.h"
 #include "scd_pcm.h"
-int  PCM_Init(UINT8 ChipID, int Rate);
-void PCM_Set_Rate(UINT8 ChipID, int Rate);
-void PCM_Reset(UINT8 ChipID);
-void PCM_Write_Reg(UINT8 ChipID, unsigned int Reg, unsigned int Data);
-int  PCM_Update(UINT8 ChipID, int **buf, int Length);
+int  PCM_Init(void *chip, int Rate);
+void PCM_Set_Rate(void *chip, int Rate);
+void PCM_Reset(void *chip);
+void PCM_Write_Reg(void *chip, unsigned int Reg, unsigned int Data);
+int  PCM_Update(void *chip, int **buf, int Length);
 
 #define PCM_STEP_SHIFT 11
-
-extern UINT8 CHIP_SAMPLING_MODE;
-extern INT32 CHIP_SAMPLE_RATE;
-#define MAX_CHIPS	0x02
-static struct pcm_chip_ PCM_Chip[MAX_CHIPS];
 
 /*static unsigned char VolTabIsInit = 0x00;
 static int PCM_Volume_Tab[256 * 256];*/
@@ -39,9 +34,9 @@ static int PCM_Volume_Tab[256 * 256];*/
  * @param Rate Sample rate.
  * @return 0 if successful.
  */
-int PCM_Init(UINT8 ChipID, int Rate)
+int PCM_Init(void *_info, int Rate)
 {
-	struct pcm_chip_ *chip = &PCM_Chip[ChipID];
+	struct pcm_chip_ *chip = (struct pcm_chip_ *)_info;
 	int i/*, j, out*/;
 	
 	/*if (! VolTabIsInit)
@@ -72,9 +67,9 @@ int PCM_Init(UINT8 ChipID, int Rate)
 	
 	chip->RAMSize = 64 * 1024;
 	chip->RAM = (unsigned char*)malloc(chip->RAMSize);
-	PCM_Reset(ChipID);
-	PCM_Set_Rate(ChipID, Rate);
-	
+	PCM_Reset(chip);
+	PCM_Set_Rate(chip, Rate);
+
 	return 0;
 }
 
@@ -82,9 +77,9 @@ int PCM_Init(UINT8 ChipID, int Rate)
 /**
  * PCM_Reset(): Reset the PCM chip.
  */
-void PCM_Reset(UINT8 ChipID)
+void PCM_Reset(void *_info)
 {
-	struct pcm_chip_ *chip = &PCM_Chip[ChipID];
+	struct pcm_chip_ *chip = (struct pcm_chip_ *)_info;
 	int i;
 	struct pcm_chan_* chan;
 	
@@ -116,9 +111,9 @@ void PCM_Reset(UINT8 ChipID)
  * PCM_Set_Rate(): Change the PCM sample rate.
  * @param Rate New sample rate.
  */
-void PCM_Set_Rate(UINT8 ChipID, int Rate)
+void PCM_Set_Rate(void *_info, int Rate)
 {
-	struct pcm_chip_ *chip = &PCM_Chip[ChipID];
+	struct pcm_chip_ *chip = (struct pcm_chip_ *)_info;
 	int i;
 	
 	if (Rate == 0)
@@ -140,9 +135,9 @@ void PCM_Set_Rate(UINT8 ChipID, int Rate)
  * @param Reg Register ID.
  * @param Data Data to write.
  */
-void PCM_Write_Reg(UINT8 ChipID, unsigned int Reg, unsigned int Data)
+void PCM_Write_Reg(void *_info, unsigned int Reg, unsigned int Data)
 {
-	struct pcm_chip_ *chip = &PCM_Chip[ChipID];
+	struct pcm_chip_ *chip = (struct pcm_chip_ *)_info;
 	int i;
 	struct pcm_chan_* chan = &chip->Channel[chip->Cur_Chan];
 	
@@ -267,9 +262,9 @@ void PCM_Write_Reg(UINT8 ChipID, unsigned int Reg, unsigned int Data)
  * @param buf PCM buffer.
  * @param Length Buffer length.
  */
-int PCM_Update(UINT8 ChipID, int **buf, int Length)
+int PCM_Update(void *_info, int **buf, int Length)
 {
-	struct pcm_chip_ *chip = &PCM_Chip[ChipID];
+	struct pcm_chip_ *chip = (struct pcm_chip_ *)_info;
 	int i, j;
 	int *bufL, *bufR;		//, *volL, *volR;
 	unsigned int Addr, k;
@@ -431,67 +426,65 @@ int PCM_Update(UINT8 ChipID, int **buf, int Length)
 }
 
 
-void rf5c164_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void rf5c164_update(void *chip, stream_sample_t **outputs, int samples)
 {
-	struct pcm_chip_ *chip = &PCM_Chip[ChipID];
-	
-	PCM_Update(ChipID, outputs, samples);
+	PCM_Update(chip, outputs, samples);
 }
 
-int device_start_rf5c164(UINT8 ChipID, int clock)
+int device_start_rf5c164(void **_info, int clock, int CHIP_SAMPLING_MODE, int CHIP_SAMPLE_RATE)
 {
 	/* allocate memory for the chip */
 	//rf5c164_state *chip = get_safe_token(device);
 	struct pcm_chip_ *chip;
 	int rate;
 	
-	if (ChipID >= MAX_CHIPS)
-		return 0;
-	
-	chip = &PCM_Chip[ChipID];
+	chip = (struct pcm_chip_ *) calloc(1, sizeof(struct pcm_chip_));
+	*_info = (void *) chip;	
+
 	rate = (clock & 0x7FFFFFFF) / 384;
 	if (((CHIP_SAMPLING_MODE & 0x01) && rate < CHIP_SAMPLE_RATE) ||
 		CHIP_SAMPLING_MODE == 0x02)
 		rate = CHIP_SAMPLE_RATE;
 	
-	PCM_Init(ChipID, rate);
-	PCM_Chip[ChipID].Smpl0Patch = (clock & 0x80000000) >> 31;
+	PCM_Init(chip, rate);
+	chip->Smpl0Patch = (clock & 0x80000000) >> 31;
 	
 	/* allocate the stream */
 	//chip->stream = stream_create(device, 0, 2, device->clock / 384, chip, rf5c68_update);
-	
+
 	return rate;
 }
 
-void device_stop_rf5c164(UINT8 ChipID)
+void device_stop_rf5c164(void *_info)
 {
-	struct pcm_chip_ *chip = &PCM_Chip[ChipID];
+	struct pcm_chip_ *chip = (struct pcm_chip_ *)_info;
 	free(chip->RAM);	chip->RAM = NULL;
-	
+	free(chip);	
+
 	return;
 }
 
-void device_reset_rf5c164(UINT8 ChipID)
+void device_reset_rf5c164(void *chip)
 {
 	//struct pcm_chip_ *chip = &PCM_Chip[ChipID];
-	PCM_Reset(ChipID);
+	PCM_Reset(chip);
 }
 
-void rf5c164_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void rf5c164_w(void *chip, offs_t offset, UINT8 data)
 {
 	//struct pcm_chip_ *chip = &PCM_Chip[ChipID];
-	PCM_Write_Reg(ChipID, offset, data);
+	PCM_Write_Reg(chip, offset, data);
 }
 
-void rf5c164_mem_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void rf5c164_mem_w(void *_info, offs_t offset, UINT8 data)
 {
-	struct pcm_chip_ *chip = &PCM_Chip[ChipID];
+	struct pcm_chip_ *chip = (struct pcm_chip_ *)_info;
 	chip->RAM[chip->Bank | offset] = data;
 }
 
-void rf5c164_write_ram(UINT8 ChipID, offs_t DataStart, offs_t DataLength, const UINT8* RAMData)
+void rf5c164_write_ram(void *_info, offs_t DataStart, offs_t DataLength, const UINT8* RAMData)
 {
-	struct pcm_chip_ *chip = &PCM_Chip[ChipID];
+	struct pcm_chip_ *chip = (struct pcm_chip_ *)_info;
 	
 	DataStart |= chip->Bank;
 	if (DataStart >= chip->RAMSize)
@@ -505,9 +498,9 @@ void rf5c164_write_ram(UINT8 ChipID, offs_t DataStart, offs_t DataLength, const 
 }
 
 
-void rf5c164_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
+void rf5c164_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-	struct pcm_chip_ *chip = &PCM_Chip[ChipID];
+	struct pcm_chip_ *chip = (struct pcm_chip_ *)_info;
 	unsigned char CurChn;
 	
 	for (CurChn = 0; CurChn < 8; CurChn ++)

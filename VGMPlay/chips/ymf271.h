@@ -17,14 +17,14 @@ WRITE8_DEVICE_HANDLER( ymf271_w );
 DEVICE_GET_INFO( ymf271 );
 #define SOUND_YMF271 DEVICE_GET_INFO_NAME( ymf271 )*/
 
-void ymf271_update(UINT8 ChipID, stream_sample_t **outputs, int samples);
-int device_start_ymf271(UINT8 ChipID, int clock);
-void device_stop_ymf271(UINT8 ChipID);
-void device_reset_ymf271(UINT8 ChipID);
+void ymf271_update(void *chip, stream_sample_t **outputs, int samples);
+int device_start_ymf271(void **chip, int clock);
+void device_stop_ymf271(void *chip);
+void device_reset_ymf271(void *chip);
 
-UINT8 ymf271_r(UINT8 ChipID, offs_t offset);
-void ymf271_w(UINT8 ChipID, offs_t offset, UINT8 data);
-void ymf271_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
+UINT8 ymf271_r(void *chip, offs_t offset);
+void ymf271_w(void *chip, offs_t offset, UINT8 data);
+void ymf271_write_rom(void *chip, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
 					  const UINT8* ROMData);
 
-void ymf271_set_mute_mask(UINT8 ChipID, UINT32 MuteMask);
+void ymf271_set_mute_mask(void *chip, UINT32 MuteMask);

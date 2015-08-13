@@ -81,7 +81,7 @@ Ensoniq OTIS - ES5505                                            Ensoniq OTTO - 
 ***********************************************************************************************/
 
 //#include "emu.h"
-#include <malloc.h>
+#include <stdlib.h>
 #include <string.h>	// for memset
 #include "mamedef.h"
 #include "es5506.h"
@@ -213,9 +213,6 @@ struct _es5506_state
 	void* SmpRateData;
 };
 
-
-#define MAX_CHIPS	0x02
-static es5506_state ES5506Data[MAX_CHIPS];
 
 /*INLINE es5506_state *get_safe_token(device_t *device)
 {
@@ -881,10 +878,9 @@ static void generate_samples(es5506_state *chip, INT32 **outputs, int offset, in
 ***********************************************************************************************/
 
 //static STREAM_UPDATE( es5506_update )
-void es5506_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void es5506_update(void *param, stream_sample_t **outputs, int samples)
 {
-	//es5506_state *chip = (es5506_state *)param;
-	es5506_state *chip = &ES5506Data[ChipID];
+	es5506_state *chip = (es5506_state *)param;
 	int offset;
 
 #if MAKE_WAVS
@@ -1022,14 +1018,12 @@ static void es5506_start_common(es5506_state *chip, int clock, UINT8 sndtype)
 
 
 //static DEVICE_START( es5506 )
-int device_start_es5506(UINT8 ChipID, int clock, int channels)
+int device_start_es5506(void **_info, int clock, int channels)
 {
 	es5506_state* chip;
 
-	if (ChipID >= MAX_CHIPS)
-		return 0;
-	
-	chip = &ES5506Data[ChipID];
+	chip = (es5506_state *) calloc(1, sizeof(es5506_state));
+	*_info = (void *) chip;
 	
 	//es5506_start_common(device, device->static_config(), ES5506);
 	//chip->channels = channels;
@@ -1047,9 +1041,9 @@ int device_start_es5506(UINT8 ChipID, int clock, int channels)
 ***********************************************************************************************/
 
 //static DEVICE_STOP( es5506 )
-void device_stop_es5506(UINT8 ChipID)
+void device_stop_es5506(void *_info)
 {
-	es5506_state *chip = &ES5506Data[ChipID];
+	es5506_state *chip = (es5506_state *)_info;
 	
 	free(chip->ulaw_lookup);	chip->ulaw_lookup = NULL;
 	free(chip->volume_lookup);	chip->volume_lookup = NULL;
@@ -1073,13 +1067,15 @@ void device_stop_es5506(UINT8 ChipID)
 	}
 }
 #endif
+
+	free(chip);
 }
 
 
 //static DEVICE_RESET( es5506 )
-void device_reset_es5506(UINT8 ChipID)
+void device_reset_es5506(void *_info)
 {
-	es5506_state *chip = &ES5506Data[ChipID];
+	es5506_state *chip = (es5506_state *)_info;
 	int j;
 	UINT32 accum_mask;
 	
@@ -1612,10 +1608,10 @@ static UINT8 es5506_r(es5506_state *chip, offs_t offset)
 
 
 //void es5506_voice_bank_w(device_t *device, int voice, int bank)
-void es5506_voice_bank_w(UINT8 ChipID, int voice, int bank)
+void es5506_voice_bank_w(void *_info, int voice, int bank)
 {
 	//es5506_state *chip = get_safe_token(device);
-	es5506_state *chip = &ES5506Data[ChipID];
+	es5506_state *chip = (es5506_state *)_info;
 	chip->voice[voice].exbank=bank;
 }
 
@@ -2239,9 +2235,9 @@ static UINT8 es5505_r(es5506_state *chip, offs_t offset)
 		return (result & 0xFF00) >> 8;
 }
 
-UINT8 es550x_r(UINT8 ChipID, offs_t offset)
+UINT8 es550x_r(void *_info, offs_t offset)
 {
-	es5506_state *chip = &ES5506Data[ChipID];
+	es5506_state *chip = (es5506_state *)_info;
 	
 	if (! chip->sndtype)
 		return es5505_r(chip, offset);
@@ -2249,10 +2245,9 @@ UINT8 es550x_r(UINT8 ChipID, offs_t offset)
 		return es5506_r(chip, offset);
 }
 
-void es550x_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void es550x_w(void *_info, offs_t offset, UINT8 data)
 {
-	es5506_state *chip = &ES5506Data[ChipID];
-	
+	es5506_state *chip = (es5506_state *)_info;
 	if (offset < 0x40)
 	{
 		if (! chip->sndtype)
@@ -2262,14 +2257,14 @@ void es550x_w(UINT8 ChipID, offs_t offset, UINT8 data)
 	}
 	else
 	{
-		es5506_voice_bank_w(ChipID, offset & 0x1F, data << 20);
+		es5506_voice_bank_w(chip, offset & 0x1F, data << 20);
 	}
 	return;
 }
 
-void es550x_w16(UINT8 ChipID, offs_t offset, UINT16 data)
+void es550x_w16(void *_info, offs_t offset, UINT16 data)
 {
-	es5506_state *chip = &ES5506Data[ChipID];
+	es5506_state *chip = (es5506_state *)_info;
 	
 	if (offset < 0x40)
 	{
@@ -2286,7 +2281,7 @@ void es550x_w16(UINT8 ChipID, offs_t offset, UINT16 data)
 	}
 	else
 	{
-		es5506_voice_bank_w(ChipID, offset & 0x1F, data << 20);
+		es5506_voice_bank_w(chip, offset & 0x1F, data << 20);
 	}
 	return;
 }
@@ -2311,10 +2306,10 @@ void es550x_w16(UINT8 ChipID, offs_t offset, UINT16 data)
 	chip->stream->set_output_gain(channel,volume / 100.0);
 }*/
 
-void es5506_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
+void es5506_write_rom(void *_info, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
 					   const UINT8* ROMData)
 {
-	es5506_state *info = &ES5506Data[ChipID];
+	es5506_state *info = (es5506_state *)_info;
 	UINT8 curRgn;
 	UINT8 is8bROM;
 	UINT32 curPos;
@@ -2355,9 +2350,9 @@ void es5506_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t Dat
 	return;
 }
 
-void es5506_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
+void es5506_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-	es5506_state *chip = &ES5506Data[ChipID];
+	es5506_state *chip = (es5506_state *)_info;
 	UINT8 CurChn;
 	
 	for (CurChn = 0; CurChn < 32; CurChn ++)
@@ -2366,9 +2361,9 @@ void es5506_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
 	return;
 }
 
-void es5506_set_srchg_cb(UINT8 ChipID, SRATE_CALLBACK CallbackFunc, void* DataPtr)
+void es5506_set_srchg_cb(void *_info, SRATE_CALLBACK CallbackFunc, void* DataPtr)
 {
-	es5506_state *chip = &ES5506Data[ChipID];
+	es5506_state *chip = (es5506_state *)_info;
 	
 	// set Sample Rate Change Callback routine
 	chip->SmpRateFunc = CallbackFunc;

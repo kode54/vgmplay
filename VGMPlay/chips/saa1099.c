@@ -65,6 +65,7 @@
 
 //#include "emu.h"
 #include "mamedef.h"
+#include <stdlib.h>
 #include <memory.h>
 #include "saa1099.h"
 
@@ -171,9 +172,6 @@ static const UINT8 envelope[8][64] = {
 };
 
 
-#define MAX_CHIPS	0x02
-static saa1099_state SAA1099Data[MAX_CHIPS];
-
 /*INLINE saa1099_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
@@ -226,10 +224,9 @@ static void saa1099_envelope(saa1099_state *saa, int ch)
 
 
 //static STREAM_UPDATE( saa1099_update )
-void saa1099_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void saa1099_update(void *param, stream_sample_t **outputs, int samples)
 {
-	//saa1099_state *saa = (saa1099_state *)param;
-	saa1099_state *saa = &SAA1099Data[ChipID];
+	saa1099_state *saa = (saa1099_state *)param;
 	int j, ch;
 	int clk2div512;
 
@@ -367,16 +364,14 @@ void saa1099_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
 
 
 //static DEVICE_START( saa1099 )
-int device_start_saa1099(UINT8 ChipID, int clock)
+int device_start_saa1099(void **_info, int clock)
 {
 	//saa1099_state *saa = get_safe_token(device);
 	saa1099_state *saa;
 	UINT8 CurChn;
 
-	if (ChipID >= MAX_CHIPS)
-		return 0;
-	
-	saa = &SAA1099Data[ChipID];
+	saa = (saa1099_state *) calloc(1, sizeof(saa1099_state));
+	*_info = (void *) saa;
 
 	/* copy global parameters */
 	//saa->device = device;
@@ -393,16 +388,16 @@ int device_start_saa1099(UINT8 ChipID, int clock)
 	return (int)(saa->sample_rate + 0.5);
 }
 
-void device_stop_saa1099(UINT8 ChipID)
+void device_stop_saa1099(void *chip)
 {
-	saa1099_state *saa = &SAA1099Data[ChipID];
+	free(chip);
 	
 	return;
 }
 
-void device_reset_saa1099(UINT8 ChipID)
+void device_reset_saa1099(void *_info)
 {
-	saa1099_state *saa = &SAA1099Data[ChipID];
+	saa1099_state *saa = (saa1099_state *)_info;
 	struct saa1099_channel *sachn;
 	UINT8 CurChn;
 
@@ -444,10 +439,10 @@ void device_reset_saa1099(UINT8 ChipID)
 }
 
 //WRITE8_DEVICE_HANDLER( saa1099_control_w )
-void saa1099_control_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void saa1099_control_w(void *_info, offs_t offset, UINT8 data)
 {
 	//saa1099_state *saa = get_safe_token(device);
-	saa1099_state *saa = &SAA1099Data[ChipID];
+	saa1099_state *saa = (saa1099_state *)_info;
 
 	if ((data & 0xff) > 0x1c)
 	{
@@ -469,10 +464,10 @@ void saa1099_control_w(UINT8 ChipID, offs_t offset, UINT8 data)
 
 
 //WRITE8_DEVICE_HANDLER( saa1099_data_w )
-void saa1099_data_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void saa1099_data_w(void *_info, offs_t offset, UINT8 data)
 {
 	//saa1099_state *saa = get_safe_token(device);
-	saa1099_state *saa = &SAA1099Data[ChipID];
+	saa1099_state *saa = (saa1099_state *)_info;
 	int reg = saa->selected_reg;
 	int ch;
 
@@ -557,9 +552,9 @@ void saa1099_data_w(UINT8 ChipID, offs_t offset, UINT8 data)
 }
 
 
-void saa1099_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
+void saa1099_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-	saa1099_state *saa = &SAA1099Data[ChipID];
+	saa1099_state *saa = (saa1099_state *)_info;
 	UINT8 CurChn;
 	
 	for (CurChn = 0; CurChn < 6; CurChn ++)

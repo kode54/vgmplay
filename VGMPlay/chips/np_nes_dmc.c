@@ -4,7 +4,6 @@
 // (Note: Encoding is UTF-8)
 
 #include <stdlib.h>	// for rand()
-#include <malloc.h>
 #include <memory.h>	// for memset()
 #include <stddef.h>	// for NULL
 #include "mamedef.h"

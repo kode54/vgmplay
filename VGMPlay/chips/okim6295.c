@@ -25,7 +25,7 @@
 //#include "emu.h"
 //#include "streams.h"
 #include <stdio.h>
-#include <malloc.h>
+#include <stdlib.h>
 #include <memory.h>
 #include <math.h>
 #include "okim6295.h"
@@ -115,9 +115,6 @@ static int tables_computed = 0;
 	AM_RANGE(0x00000, 0x3ffff) AM_ROM
 ADDRESS_MAP_END*/
 
-
-#define MAX_CHIPS	0x02
-static okim6295_state OKIM6295Data[MAX_CHIPS];
 
 /*INLINE okim6295_state *get_safe_token(running_device *device)
 {
@@ -334,10 +331,9 @@ static void generate_adpcm(okim6295_state *chip, struct ADPCMVoice *voice, INT16
 ***********************************************************************************************/
 
 //static STREAM_UPDATE( okim6295_update )
-void okim6295_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void okim6295_update(void *param, stream_sample_t **outputs, int samples)
 {
-	//okim6295_state *chip = (okim6295_state *)param;
-	okim6295_state *chip = &OKIM6295Data[ChipID];
+	okim6295_state *chip = (okim6295_state *)param;
 	int i;
 
 	memset(outputs[0], 0, samples * sizeof(*outputs[0]));
@@ -416,7 +412,7 @@ static void okim6295_state_save_register(okim6295_state *info, running_device *d
 ***********************************************************************************************/
 
 //static DEVICE_START( okim6295 )
-int device_start_okim6295(UINT8 ChipID, int clock)
+int device_start_okim6295(void **_info, int clock)
 {
 	//const okim6295_interface *intf = (const okim6295_interface *)device->baseconfig().static_config;
 	//okim6295_state *info = get_safe_token(device);
@@ -425,10 +421,8 @@ int device_start_okim6295(UINT8 ChipID, int clock)
 	int divisor;
 	//int voice;
 
-	if (ChipID >= MAX_CHIPS)
-		return 0;
-	
-	info = &OKIM6295Data[ChipID];
+	info = (okim6295_state *) calloc(1, sizeof(okim6295_state));
+	*_info = (void *) info;
 	
 	compute_tables();
 
@@ -459,18 +453,20 @@ int device_start_okim6295(UINT8 ChipID, int clock)
 	}*/
 
 	//okim6295_state_save_register(info, device);
-	
+
 	return info->master_clock / divisor;
 }
 
 
 
-void device_stop_okim6295(UINT8 ChipID)
+void device_stop_okim6295(void *_info)
 {
-	okim6295_state* chip = &OKIM6295Data[ChipID];
+	okim6295_state* chip = (okim6295_state *)_info;
 	
 	free(chip->ROM);	chip->ROM = NULL;
 	chip->ROMSize = 0x00;
+
+	free(chip);
 	
 	return;
 }
@@ -482,10 +478,10 @@ void device_stop_okim6295(UINT8 ChipID)
 ***********************************************************************************************/
 
 //static DEVICE_RESET( okim6295 )
-void device_reset_okim6295(UINT8 ChipID)
+void device_reset_okim6295(void *_info)
 {
 	//okim6295_state *info = get_safe_token(device);
-	okim6295_state *info = &OKIM6295Data[ChipID];
+	okim6295_state *info = (okim6295_state *)_info;
 	int voice;
 
 	//stream_update(info->stream);
@@ -571,10 +567,10 @@ INLINE void okim6295_set_pin7(okim6295_state *info, int pin7)
 ***********************************************************************************************/
 
 //READ8_DEVICE_HANDLER( okim6295_r )
-UINT8 okim6295_r(UINT8 ChipID, offs_t offset)
+UINT8 okim6295_r(void *_info, offs_t offset)
 {
 	//okim6295_state *info = get_safe_token(device);
-	okim6295_state *info = &OKIM6295Data[ChipID];
+	okim6295_state *info = (okim6295_state *)_info;
 	int i, result;
 
 	result = 0xf0;	/* naname expects bits 4-7 to be 1 */
@@ -702,9 +698,9 @@ void okim6295_write_command(okim6295_state *info, UINT8 data)
 	}
 }
 
-void okim6295_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void okim6295_w(void *_info, offs_t offset, UINT8 data)
 {
-	okim6295_state* chip = &OKIM6295Data[ChipID];
+	okim6295_state* chip = (okim6295_state *)_info;
 	
 	switch(offset)
 	{
@@ -751,10 +747,10 @@ void okim6295_w(UINT8 ChipID, offs_t offset, UINT8 data)
 	return;
 }
 
-void okim6295_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
+void okim6295_write_rom(void *_info, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
 						const UINT8* ROMData)
 {
-	okim6295_state *chip = &OKIM6295Data[ChipID];
+	okim6295_state *chip = (okim6295_state *)_info;
 	
 	if (chip->ROMSize != ROMSize)
 	{
@@ -774,9 +770,9 @@ void okim6295_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t D
 }
 
 
-void okim6295_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
+void okim6295_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-	okim6295_state *chip = &OKIM6295Data[ChipID];
+	okim6295_state *chip = (okim6295_state *)_info;
 	UINT8 CurChn;
 	
 	for (CurChn = 0; CurChn < OKIM6295_VOICES; CurChn ++)
@@ -785,9 +781,9 @@ void okim6295_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
 	return;
 }
 
-void okim6295_set_srchg_cb(UINT8 ChipID, SRATE_CALLBACK CallbackFunc, void* DataPtr)
+void okim6295_set_srchg_cb(void *_info, SRATE_CALLBACK CallbackFunc, void* DataPtr)
 {
-	okim6295_state *info = &OKIM6295Data[ChipID];
+	okim6295_state *info = (okim6295_state *)_info;
 	
 	// set Sample Rate Change Callback routine
 	info->SmpRateFunc = CallbackFunc;

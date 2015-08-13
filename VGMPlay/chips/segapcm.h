@@ -23,16 +23,16 @@ READ8_DEVICE_HANDLER( sega_pcm_r );
 DEVICE_GET_INFO( segapcm );
 #define SOUND_SEGAPCM DEVICE_GET_INFO_NAME( segapcm )*/
 
-void SEGAPCM_update(UINT8 ChipID, stream_sample_t **outputs, int samples);
+void SEGAPCM_update(void *chip, stream_sample_t **outputs, int samples);
 
-int device_start_segapcm(UINT8 ChipID, int clock, int intf_bank);
-void device_stop_segapcm(UINT8 ChipID);
-void device_reset_segapcm(UINT8 ChipID);
+int device_start_segapcm(void **chip, int clock, int intf_bank);
+void device_stop_segapcm(void *chip);
+void device_reset_segapcm(void *chip);
 
-void sega_pcm_w(UINT8 ChipID, offs_t offset, UINT8 data);
-UINT8 sega_pcm_r(UINT8 ChipID, offs_t offset);
-void sega_pcm_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
+void sega_pcm_w(void *chip, offs_t offset, UINT8 data);
+UINT8 sega_pcm_r(void *chip, offs_t offset);
+void sega_pcm_write_rom(void *chip, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
 						const UINT8* ROMData);
 
-void segapcm_set_mute_mask(UINT8 ChipID, UINT32 MuteMask);
+void segapcm_set_mute_mask(void *chip, UINT32 MuteMask);
 

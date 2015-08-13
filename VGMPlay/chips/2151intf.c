@@ -6,6 +6,7 @@
 
 ***************************************************************************/
 
+#include <stdlib.h>
 #include "mamedef.h"
 //#include "sndintrf.h"
 //#include "streams.h"
@@ -27,12 +28,6 @@ struct _ym2151_state
 };
 
 
-extern UINT8 CHIP_SAMPLING_MODE;
-extern INT32 CHIP_SAMPLE_RATE;
-#define MAX_CHIPS	0x02
-static ym2151_state YM2151Data[MAX_CHIPS];
-
-
 /*INLINE ym2151_state *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
@@ -43,10 +38,9 @@ static ym2151_state YM2151Data[MAX_CHIPS];
 }*/
 
 //static STREAM_UPDATE( ym2151_update )
-void ym2151_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void ym2151_update(void *param, stream_sample_t **outputs, int samples)
 {
-	//ym2151_state *info = (ym2151_state *)param;
-	ym2151_state *info = &YM2151Data[ChipID];
+	ym2151_state *info = (ym2151_state *)param;
 	ym2151_update_one(info->chip, outputs, samples);
 	//YM2151UpdateOne(0x00, outputs, samples);
 }
@@ -62,7 +56,7 @@ void ym2151_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
 
 
 //static DEVICE_START( ym2151 )
-int device_start_ym2151(UINT8 ChipID, int clock)
+int device_start_ym2151(void **_info, int clock, int CHIP_SAMPLING_MODE, int CHIP_SAMPLE_RATE)
 {
 	//static const ym2151_interface dummy = { 0 };
 	
@@ -70,10 +64,9 @@ int device_start_ym2151(UINT8 ChipID, int clock)
 	ym2151_state *info;
 	int rate;
 
-	if (ChipID >= MAX_CHIPS)
-		return 0;
-	
-	info = &YM2151Data[ChipID];
+	info = (ym2151_state *) calloc(1, sizeof(ym2151_state));
+	*_info = (void *) info;	
+
 	rate = clock/64;
 	if ((CHIP_SAMPLING_MODE == 0x01 && rate < CHIP_SAMPLE_RATE) ||
 		CHIP_SAMPLING_MODE == 0x02)
@@ -91,35 +84,36 @@ int device_start_ym2151(UINT8 ChipID, int clock)
 
 	//ym2151_set_irq_handler(info->chip,info->intf->irqhandler);
 	//ym2151_set_port_write_handler(info->chip,info->intf->portwritehandler);
-	
+
 	return rate;
 }
 
 
 //static DEVICE_STOP( ym2151 )
-void device_stop_ym2151(UINT8 ChipID)
+void device_stop_ym2151(void *_info)
 {
 	//ym2151_state *info = get_safe_token(device);
-	ym2151_state *info = &YM2151Data[ChipID];
+	ym2151_state *info = (ym2151_state *)_info;
 	ym2151_shutdown(info->chip);
 	//YM2151Shutdown();
+	free(info);
 }
 
 //static DEVICE_RESET( ym2151 )
-void device_reset_ym2151(UINT8 ChipID)
+void device_reset_ym2151(void *_info)
 {
 	//ym2151_state *info = get_safe_token(device);
-	ym2151_state *info = &YM2151Data[ChipID];
+	ym2151_state *info = (ym2151_state *)_info;
 	ym2151_reset_chip(info->chip);
 	//YM2151ResetChip(0x00);
 }
 
 
 //READ8_DEVICE_HANDLER( ym2151_r )
-UINT8 ym2151_r(UINT8 ChipID, offs_t offset)
+UINT8 ym2151_r(void *_info, offs_t offset)
 {
 	//ym2151_state *token = get_safe_token(device);
-	ym2151_state *token = &YM2151Data[ChipID];
+	ym2151_state *token = (ym2151_state *)_info;
 
 	if (offset & 1)
 	{
@@ -132,10 +126,10 @@ UINT8 ym2151_r(UINT8 ChipID, offs_t offset)
 }
 
 //WRITE8_DEVICE_HANDLER( ym2151_w )
-void ym2151_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void ym2151_w(void *_info, offs_t offset, UINT8 data)
 {
 	//ym2151_state *token = get_safe_token(device);
-	ym2151_state *token = &YM2151Data[ChipID];
+	ym2151_state *token = (ym2151_state *)_info;
 
 	if (offset & 1)
 	{
@@ -152,24 +146,24 @@ void ym2151_w(UINT8 ChipID, offs_t offset, UINT8 data)
 
 WRITE8_DEVICE_HANDLER( ym2151_register_port_w ) { ym2151_w(device, 0, data); }
 WRITE8_DEVICE_HANDLER( ym2151_data_port_w ) { ym2151_w(device, 1, data); }*/
-UINT8 ym2151_status_port_r(UINT8 ChipID, offs_t offset)
+UINT8 ym2151_status_port_r(void *info, offs_t offset)
 {
-	return ym2151_r(ChipID, 1);
+	return ym2151_r(info, 1);
 }
 
-void ym2151_register_port_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void ym2151_register_port_w(void *info, offs_t offset, UINT8 data)
 {
-	ym2151_w(ChipID, 0, data);
+	ym2151_w(info, 0, data);
 }
-void ym2151_data_port_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void ym2151_data_port_w(void *info, offs_t offset, UINT8 data)
 {
-	ym2151_w(ChipID, 1, data);
+	ym2151_w(info, 1, data);
 }
 
 
-void ym2151_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
+void ym2151_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-	ym2151_state *info = &YM2151Data[ChipID];
+	ym2151_state *info = (ym2151_state *)_info;
 	ym2151_set_mutemask(info->chip, MuteMask);
 }
 

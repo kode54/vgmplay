@@ -16,10 +16,10 @@ struct _upd7759_interface
 	void (*drqcallback)(int param);	/* drq callback (per chip, slave mode only) */
 };
 
-void upd7759_update(UINT8 ChipID, stream_sample_t **outputs, int samples);
-void device_reset_upd7759(UINT8 ChipID);
-int device_start_upd7759(UINT8 ChipID, int clock);
-void device_stop_upd7759(UINT8 ChipID);
+void upd7759_update(void *chip, stream_sample_t **outputs, int samples);
+void device_reset_upd7759(void *chip);
+int device_start_upd7759(void **chip, int clock);
+void device_stop_upd7759(void *chip);
 
 //void upd7759_set_bank_base(running_device *device, offs_t base);
 
@@ -28,15 +28,15 @@ void device_stop_upd7759(UINT8 ChipID);
 //int upd7759_busy_r(running_device *device);
 //WRITE8_DEVICE_HANDLER( upd7759_port_w );
 
-void upd7759_set_bank_base(UINT8 ChipID, offs_t base);
+void upd7759_set_bank_base(void *chip, offs_t base);
 
-void upd7759_reset_w(UINT8 ChipID, UINT8 data);
-void upd7759_start_w(UINT8 ChipID, UINT8 data);
-int upd7759_busy_r(UINT8 ChipID);
-void upd7759_port_w(UINT8 ChipID, offs_t offset, UINT8 data);
+void upd7759_reset_w(void *chip, UINT8 data);
+void upd7759_start_w(void *chip, UINT8 data);
+int upd7759_busy_r(void *chip);
+void upd7759_port_w(void *chip, offs_t offset, UINT8 data);
 
-void upd7759_write(UINT8 ChipID, UINT8 Port, UINT8 Data);
-void upd7759_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
+void upd7759_write(void *chip, UINT8 Port, UINT8 Data);
+void upd7759_write_rom(void *chip, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
 					   const UINT8* ROMData);
 
 //DECLARE_LEGACY_SOUND_DEVICE(UPD7759, upd7759);

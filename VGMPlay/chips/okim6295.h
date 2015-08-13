@@ -20,19 +20,19 @@ extern const okim6295_interface okim6295_interface_pin7low;*/
 //void okim6295_set_bank_base(running_device *device, int base);
 //void okim6295_set_pin7(running_device *device, int pin7);
 
-void okim6295_update(UINT8 ChipID, stream_sample_t **outputs, int samples);
-int device_start_okim6295(UINT8 ChipID, int clock);
-void device_stop_okim6295(UINT8 ChipID);
-void device_reset_okim6295(UINT8 ChipID);
+void okim6295_update(void *chip, stream_sample_t **outputs, int samples);
+int device_start_okim6295(void **chip, int clock);
+void device_stop_okim6295(void *chip);
+void device_reset_okim6295(void *chip);
 
 //READ8_DEVICE_HANDLER( okim6295_r );
 //WRITE8_DEVICE_HANDLER( okim6295_w );
-void okim6295_w(UINT8 ChipID, offs_t offset, UINT8 data);
+void okim6295_w(void *chip, offs_t offset, UINT8 data);
 
-void okim6295_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
+void okim6295_write_rom(void *chip, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
 						const UINT8* ROMData);
-void okim6295_set_mute_mask(UINT8 ChipID, UINT32 MuteMask);
-void okim6295_set_srchg_cb(UINT8 ChipID, SRATE_CALLBACK CallbackFunc, void* DataPtr);
+void okim6295_set_mute_mask(void *chip, UINT32 MuteMask);
+void okim6295_set_srchg_cb(void *chip, SRATE_CALLBACK CallbackFunc, void* DataPtr);
 
 
 /*

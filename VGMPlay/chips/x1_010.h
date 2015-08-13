@@ -13,25 +13,25 @@ struct _x1_010_interface
 };*/
 
 
-void seta_update(UINT8 ChipID, stream_sample_t **outputs, int samples);
-int device_start_x1_010(UINT8 ChipID, int clock);
-void device_stop_x1_010(UINT8 ChipID);
-void device_reset_x1_010(UINT8 ChipID);
+void seta_update(void *chip, stream_sample_t **outputs, int samples);
+int device_start_x1_010(void **chip, int clock, int CHIP_SAMPLING_MODE, int CHIP_SAMPLE_RATE);
+void device_stop_x1_010(void *chip);
+void device_reset_x1_010(void *chip);
 
 //READ8_DEVICE_HANDLER ( seta_sound_r );
 //WRITE8_DEVICE_HANDLER( seta_sound_w );
-UINT8 seta_sound_r(UINT8 ChipID, offs_t offset);
-void seta_sound_w(UINT8 ChipID, offs_t offset, UINT8 data);
+UINT8 seta_sound_r(void *chip, offs_t offset);
+void seta_sound_w(void *chip, offs_t offset, UINT8 data);
 
 //READ16_DEVICE_HANDLER ( seta_sound_word_r );
 //WRITE16_DEVICE_HANDLER( seta_sound_word_w );
 
 //void seta_sound_enable_w(device_t *device, int data);
 
-void x1_010_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
+void x1_010_write_rom(void *chip, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
 						const UINT8* ROMData);
 
-void x1_010_set_mute_mask(UINT8 ChipID, UINT32 MuteMask);
+void x1_010_set_mute_mask(void *chip, UINT32 MuteMask);
 
 //DECLARE_LEGACY_SOUND_DEVICE(X1_010, x1_010);
 

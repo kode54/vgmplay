@@ -37,7 +37,7 @@
 #include <stdio.h>
 #endif
 #include <memory.h>
-#include <malloc.h>
+#include <stdlib.h>
 #include "ymz280b.h"
 
 #define NULL	((void *)0)
@@ -169,11 +169,6 @@ static const timer_fired_func update_irq_state_cb[] =
 	update_irq_state_timer_7
 };*/
 
-
-extern UINT8 CHIP_SAMPLING_MODE;
-extern INT32 CHIP_SAMPLE_RATE;
-#define MAX_CHIPS	0x10
-static ymz280b_state YMZ280BData[MAX_CHIPS];
 
 /*INLINE ymz280b_state *get_safe_token(const device_config *device)
 {
@@ -634,10 +629,9 @@ static int generate_pcm16(struct YMZ280BVoice *voice, UINT8 *base, UINT32 size, 
 ***********************************************************************************************/
 
 //static STREAM_UPDATE( ymz280b_update )
-void ymz280b_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void ymz280b_update(void *param, stream_sample_t **outputs, int samples)
 {
-	//ymz280b_state *chip = (ymz280b_state *)param;
-	ymz280b_state *chip = &YMZ280BData[ChipID];
+	ymz280b_state *chip = (ymz280b_state *)param;
 	stream_sample_t *lacc = outputs[0];
 	stream_sample_t *racc = outputs[1];
 	int v;
@@ -805,7 +799,7 @@ void ymz280b_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
 ***********************************************************************************************/
 
 //static DEVICE_START( ymz280b )
-int device_start_ymz280b(UINT8 ChipID, int clock)
+int device_start_ymz280b(void **_info, int clock)
 {
 	static const ymz280b_interface defintrf = { 0 };
 	//const ymz280b_interface *intf = (device->static_config != NULL) ? (const ymz280b_interface *)device->static_config : &defintrf;
@@ -814,10 +808,9 @@ int device_start_ymz280b(UINT8 ChipID, int clock)
 	ymz280b_state *chip;
 	int chn;
 
-	if (ChipID >= MAX_CHIPS)
-		return 0;
+	chip = (ymz280b_state *) calloc(1, sizeof(ymz280b_state));
+	*_info = (void *) chip;
 	
-	chip = &YMZ280BData[ChipID];
 	//chip->device = device;
 	//devcb_resolve_read8(&chip->ext_ram_read, &intf->ext_read, device);
 	//devcb_resolve_write8(&chip->ext_ram_write, &intf->ext_write, device);
@@ -910,15 +903,15 @@ int device_start_ymz280b(UINT8 ChipID, int clock)
 		}
 	}
 #endif
-	
+
 	return (int)INTERNAL_SAMPLE_RATE;
 }
 
 //static DEVICE_STOP( ymz280b )
-void device_stop_ymz280b(UINT8 ChipID)
+void device_stop_ymz280b(void *_info)
 {
 	//ymz280b_state *chip = get_safe_token(device);
-	ymz280b_state *chip = &YMZ280BData[ChipID];
+	ymz280b_state *chip = (ymz280b_state *)_info;
 	free(chip->region_base);	chip->region_base = NULL;
 	free(chip->scratch);
 	
@@ -932,13 +925,16 @@ void device_stop_ymz280b(UINT8 ChipID)
 		}
 	}
 #endif
+
+	free(chip);
+
 	return;
 }
 
 //static DEVICE_RESET( ymz280b )
-void device_reset_ymz280b(UINT8 ChipID)
+void device_reset_ymz280b(void *_info)
 {
-	ymz280b_state *chip = &YMZ280BData[ChipID];
+	ymz280b_state *chip = (ymz280b_state *)_info;
 	/*struct YMZ280BVoice *voice;
 	unsigned char curvoc;
 	
@@ -1262,10 +1258,10 @@ static int compute_status(ymz280b_state *chip)
 ***********************************************************************************************/
 
 //READ8_DEVICE_HANDLER( ymz280b_r )
-UINT8 ymz280b_r(UINT8 ChipID, offs_t offset)
+UINT8 ymz280b_r(void *_info, offs_t offset)
 {
 	//ymz280b_state *chip = get_safe_token(device);
-	ymz280b_state *chip = &YMZ280BData[ChipID];
+	ymz280b_state *chip = (ymz280b_state *)_info;
 
 	if ((offset & 1) == 0)
 	{
@@ -1288,10 +1284,10 @@ UINT8 ymz280b_r(UINT8 ChipID, offs_t offset)
 
 
 //WRITE8_DEVICE_HANDLER( ymz280b_w )
-void ymz280b_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void ymz280b_w(void *_info, offs_t offset, UINT8 data)
 {
 	//ymz280b_state *chip = get_safe_token(device);
-	ymz280b_state *chip = &YMZ280BData[ChipID];
+	ymz280b_state *chip = (ymz280b_state *)_info;
 
 	if ((offset & 1) == 0)
 		chip->current_register = data;
@@ -1304,10 +1300,10 @@ void ymz280b_w(UINT8 ChipID, offs_t offset, UINT8 data)
 	}
 }
 
-void ymz280b_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
+void ymz280b_write_rom(void *_info, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
 					   const UINT8* ROMData)
 {
-	ymz280b_state *chip = &YMZ280BData[ChipID];
+	ymz280b_state *chip = (ymz280b_state *)_info;
 	
 	if (chip->region_size != ROMSize)
 	{
@@ -1326,9 +1322,9 @@ void ymz280b_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t Da
 }
 
 
-void ymz280b_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
+void ymz280b_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-	ymz280b_state *chip = &YMZ280BData[ChipID];
+	ymz280b_state *chip = (ymz280b_state *)_info;
 	UINT8 CurChn;
 	
 	for (CurChn = 0; CurChn < 8; CurChn ++)

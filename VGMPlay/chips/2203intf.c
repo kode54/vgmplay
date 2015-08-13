@@ -1,6 +1,6 @@
 #include <math.h>
 #include <memory.h>	// for memset
-#include <malloc.h>	// for free
+#include <stdlib.h>	// for free
 #include <stddef.h>	// for NULL
 #include "mamedef.h"
 //#include "sndintrf.h"
@@ -22,19 +22,12 @@ struct _ym2203_state
 	void *			chip;
 	void *			psg;
 	ym2203_interface intf;
+	int			AY_EMU_CORE;
 	//const device_config *device;
 };
 
 #define CHTYPE_YM2203	0x20
 
-
-extern UINT8 CHIP_SAMPLING_MODE;
-extern INT32 CHIP_SAMPLE_RATE;
-static UINT8 AY_EMU_CORE = 0x00;
-extern UINT32 SampleRate;
-
-#define MAX_CHIPS	0x10
-static ym2203_state YM2203Data[MAX_CHIPS];
 
 /*INLINE ym2203_state *get_safe_token(const device_config *device)
 {
@@ -51,7 +44,7 @@ static void psg_set_clock(void *param, int clock)
 	ym2203_state *info = (ym2203_state *)param;
 	if (info->psg != NULL)
 	{
-		switch(AY_EMU_CORE)
+		switch(info->AY_EMU_CORE)
 		{
 #ifdef ENABLE_ALL_CORES
 		case EC_MAME:
@@ -70,7 +63,7 @@ static void psg_write(void *param, int address, int data)
 	ym2203_state *info = (ym2203_state *)param;
 	if (info->psg != NULL)
 	{
-		switch(AY_EMU_CORE)
+		switch(info->AY_EMU_CORE)
 		{
 #ifdef ENABLE_ALL_CORES
 		case EC_MAME:
@@ -89,7 +82,7 @@ static int psg_read(void *param)
 	ym2203_state *info = (ym2203_state *)param;
 	if (info->psg != NULL)
 	{
-		switch(AY_EMU_CORE)
+		switch(info->AY_EMU_CORE)
 		{
 #ifdef ENABLE_ALL_CORES
 		case EC_MAME:
@@ -107,7 +100,7 @@ static void psg_reset(void *param)
 	ym2203_state *info = (ym2203_state *)param;
 	if (info->psg != NULL)
 	{
-		switch(AY_EMU_CORE)
+		switch(info->AY_EMU_CORE)
 		{
 #ifdef ENABLE_ALL_CORES
 		case EC_MAME:
@@ -151,6 +144,8 @@ static TIMER_CALLBACK( timer_callback_2203_1 )
 	ym2203_timer_over(info->chip,1);
 }*/
 
+static stream_sample_t* DUMMYBUF[0x02] = {NULL, NULL};
+
 /* update request from fm.c */
 void ym2203_update_request(void *param)
 {
@@ -161,7 +156,7 @@ void ym2203_update_request(void *param)
 	// We really don't need this.
 	/*if (info->psg != NULL)
 	{
-		switch(AY_EMU_CORE)
+		switch(info->AY_EMU_CORE)
 		{
 #ifdef ENABLE_ALL_CORES
 		case EC_MAME:
@@ -192,21 +187,21 @@ void ym2203_update_request(void *param)
 }*/
 
 //static STREAM_UPDATE( ym2203_stream_update )
-void ym2203_stream_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void ym2203_stream_update(void *_info, stream_sample_t **outputs, int samples)
 {
 	//ym2203_state *info = (ym2203_state *)param;
-	ym2203_state *info = &YM2203Data[ChipID];
+	ym2203_state *info = (ym2203_state *)_info;
 	ym2203_update_one(info->chip, outputs, samples);
 }
 
-void ym2203_stream_update_ay(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void ym2203_stream_update_ay(void *_info, stream_sample_t **outputs, int samples)
 {
 	//ym2203_state *info = (ym2203_state *)param;
-	ym2203_state *info = &YM2203Data[ChipID];
+	ym2203_state *info = (ym2203_state *)_info;
 	
 	if (info->psg != NULL)
 	{
-		switch(AY_EMU_CORE)
+		switch(info->AY_EMU_CORE)
 		{
 #ifdef ENABLE_ALL_CORES
 		case EC_MAME:
@@ -236,7 +231,7 @@ void ym2203_stream_update_ay(UINT8 ChipID, stream_sample_t **outputs, int sample
 
 
 //static DEVICE_START( ym2203 )
-int device_start_ym2203(UINT8 ChipID, int clock, UINT8 AYDisable, UINT8 AYFlags, int* AYrate)
+int device_start_ym2203(void **_info, int AY_EMU_CORE, int clock, UINT8 AYDisable, UINT8 AYFlags, int* AYrate, int CHIP_SAMPLING_MODE, int CHIP_SAMPLE_RATE)
 {
 	static const ym2203_interface generic_2203 =
 	{
@@ -254,10 +249,17 @@ int device_start_ym2203(UINT8 ChipID, int clock, UINT8 AYDisable, UINT8 AYFlags,
 	int rate;
 	int ay_clock;
 
-	if (ChipID >= MAX_CHIPS)
-		return 0;
+#ifdef ENABLE_ALL_CORES
+	if (AY_EMU_CORE >= 0x02)
+		AY_EMU_CORE = EC_EMU2149;
+#else
+        AY_EMU_CORE = EC_EMU2149;
+#endif
+
+	info = (ym2203_state *) calloc(1, sizeof(ym2203_state));
+	*_info = (void *)info;
 	
-	info = &YM2203Data[ChipID];
+	info->AY_EMU_CORE = AY_EMU_CORE;
 	rate = clock/72; /* ??? */
 	if ((CHIP_SAMPLING_MODE == 0x01 && rate < CHIP_SAMPLE_RATE) ||
 		CHIP_SAMPLING_MODE == 0x02)
@@ -314,19 +316,19 @@ int device_start_ym2203(UINT8 ChipID, int clock, UINT8 AYDisable, UINT8 AYFlags,
 	//assert_always(info->chip != NULL, "Error creating YM2203 chip");
 
 	//state_save_register_postload(device->machine, ym2203_intf_postload, info);
-	
+
 	return rate;
 }
 
 //static DEVICE_STOP( ym2203 )
-void device_stop_ym2203(UINT8 ChipID)
+void device_stop_ym2203(void *_info)
 {
 	//ym2203_state *info = get_safe_token(device);
-	ym2203_state *info = &YM2203Data[ChipID];
+	ym2203_state *info = (ym2203_state *)_info;
 	ym2203_shutdown(info->chip);
 	if (info->psg != NULL)
 	{
-		switch(AY_EMU_CORE)
+		switch(info->AY_EMU_CORE)
 		{
 #ifdef ENABLE_ALL_CORES
 		case EC_MAME:
@@ -339,13 +341,14 @@ void device_stop_ym2203(UINT8 ChipID)
 		}
 		info->psg = NULL;
 	}
+	free(info);
 }
 
 //static DEVICE_RESET( ym2203 )
-void device_reset_ym2203(UINT8 ChipID)
+void device_reset_ym2203(void *_info)
 {
 	//ym2203_state *info = get_safe_token(device);
-	ym2203_state *info = &YM2203Data[ChipID];
+	ym2203_state *info = (ym2203_state *)_info;
 	ym2203_reset_chip(info->chip);	// also resets the AY clock
 	//psg_reset(info);	// already done as a callback in ym2203_reset_chip
 }
@@ -353,62 +356,51 @@ void device_reset_ym2203(UINT8 ChipID)
 
 
 //READ8_DEVICE_HANDLER( ym2203_r )
-UINT8 ym2203_r(UINT8 ChipID, offs_t offset)
+UINT8 ym2203_r(void *_info, offs_t offset)
 {
 	//ym2203_state *info = get_safe_token(device);
-	ym2203_state *info = &YM2203Data[ChipID];
+	ym2203_state *info = (ym2203_state *)_info;
 	return ym2203_read(info->chip, offset & 1);
 }
 
 //WRITE8_DEVICE_HANDLER( ym2203_w )
-void ym2203_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void ym2203_w(void *_info, offs_t offset, UINT8 data)
 {
 	//ym2203_state *info = get_safe_token(device);
-	ym2203_state *info = &YM2203Data[ChipID];
+	ym2203_state *info = (ym2203_state *)_info;
 	ym2203_write(info->chip, offset & 1, data);
 }
 
 
 //READ8_DEVICE_HANDLER( ym2203_status_port_r )
-UINT8 ym2203_status_port_r(UINT8 ChipID, offs_t offset)
+UINT8 ym2203_status_port_r(void *info, offs_t offset)
 {
-	return ym2203_r(ChipID, 0);
+	return ym2203_r(info, 0);
 }
 //READ8_DEVICE_HANDLER( ym2203_read_port_r )
-UINT8 ym2203_read_port_r(UINT8 ChipID, offs_t offset)
+UINT8 ym2203_read_port_r(void *info, offs_t offset)
 {
-	return ym2203_r(ChipID, 1);
+	return ym2203_r(info, 1);
 }
 //WRITE8_DEVICE_HANDLER( ym2203_control_port_w )
-void ym2203_control_port_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void ym2203_control_port_w(void *info, offs_t offset, UINT8 data)
 {
-	ym2203_w(ChipID, 0, data);
+	ym2203_w(info, 0, data);
 }
 //WRITE8_DEVICE_HANDLER( ym2203_write_port_w )
-void ym2203_write_port_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void ym2203_write_port_w(void *info, offs_t offset, UINT8 data)
 {
-	ym2203_w(ChipID, 1, data);
+	ym2203_w(info, 1, data);
 }
 
 
-void ym2203_set_ay_emu_core(UINT8 Emulator)
+void ym2203_set_mute_mask(void *_info, UINT32 MuteMaskFM, UINT32 MuteMaskAY)
 {
-#ifdef ENABLE_ALL_CORES
-	AY_EMU_CORE = (Emulator < 0x02) ? Emulator : 0x00;
-#else
-	AY_EMU_CORE = EC_EMU2149;
-#endif
-	
-	return;
-}
-
-void ym2203_set_mute_mask(UINT8 ChipID, UINT32 MuteMaskFM, UINT32 MuteMaskAY)
-{
-	ym2203_state *info = &YM2203Data[ChipID];
+	ym2203_state *info = (ym2203_state *)_info;
 	ym2203_set_mutemask(info->chip, MuteMaskFM);
 	if (info->psg != NULL)
 	{
-		switch(AY_EMU_CORE)
+		switch(info->AY_EMU_CORE)
 		{
 #ifdef ENABLE_ALL_CORES
 		case EC_MAME:
@@ -422,13 +414,13 @@ void ym2203_set_mute_mask(UINT8 ChipID, UINT32 MuteMaskFM, UINT32 MuteMaskAY)
 	}
 }
 
-void ym2203_set_srchg_cb(UINT8 ChipID, SRATE_CALLBACK CallbackFunc, void* DataPtr, void* AYDataPtr)
+void ym2203_set_srchg_cb(void *_info, SRATE_CALLBACK CallbackFunc, void* DataPtr, void* AYDataPtr)
 {
-	ym2203_state *info = &YM2203Data[ChipID];
+	ym2203_state *info = (ym2203_state *)_info;
 	
 	if (info->psg != NULL)
 	{
-		switch(AY_EMU_CORE)
+		switch(info->AY_EMU_CORE)
 		{
 #ifdef ENABLE_ALL_CORES
 		case EC_MAME:

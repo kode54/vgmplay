@@ -222,7 +222,8 @@ void ym2610_set_mutemask(void *chip, UINT32 MuteMask);
 //void * ym2612_init(void *param, const device_config *device, int baseclock, int rate,
 //               FM_TIMERHANDLER TimerHandler,FM_IRQHANDLER IRQHandler);
 void * ym2612_init(void *param, int baseclock, int rate,
-               FM_TIMERHANDLER TimerHandler,FM_IRQHANDLER IRQHandler);
+               FM_TIMERHANDLER TimerHandler,FM_IRQHANDLER IRQHandler,
+               UINT8 *IsVGMInit, int Options);
 void ym2612_shutdown(void *chip);
 void ym2612_reset_chip(void *chip);
 void ym2612_update_one(void *chip, FMSAMPLE **buffer, int length);
@@ -233,6 +234,5 @@ int ym2612_timer_over(void *chip, int c );
 void ym2612_postload(void *chip);
 
 void ym2612_set_mutemask(void *chip, UINT32 MuteMask);
-void ym2612_setoptions(UINT8 Flags);
 #endif /* (BUILD_YM2612||BUILD_YM3438) */
 

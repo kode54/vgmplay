@@ -9,7 +9,7 @@
 #ifdef _DEBUG
 #include <stdio.h>
 #endif
-#include <malloc.h>
+#include <stdlib.h>
 #include <memory.h>
 #include "k053260.h"
 
@@ -53,9 +53,6 @@ struct _k053260_state
 	//device_t				*device;
 };
 
-#define MAX_CHIPS	0x02
-static k053260_state K053260Data[MAX_CHIPS];
-
 /*INLINE k053260_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
@@ -89,10 +86,10 @@ static void InitDeltaTable( k053260_state *ic, int rate, int clock )
 }
 
 //static DEVICE_RESET( k053260 )
-void device_reset_k053260(UINT8 ChipID)
+void device_reset_k053260(void *_info)
 {
 	//k053260_state *ic = get_safe_token(device);
-	k053260_state *ic = &K053260Data[ChipID];
+	k053260_state *ic = (k053260_state *)_info;
 	int i;
 
 	for( i = 0; i < 4; i++ ) {
@@ -125,7 +122,7 @@ INLINE int limit( int val, int max, int min )
 #define MINOUT -0x8000
 
 //static STREAM_UPDATE( k053260_update )
-void k053260_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void k053260_update(void *param, stream_sample_t **outputs, int samples)
 {
 	static const INT8 dpcmcnv[] = { 0,1,2,4,8,16,32,64, -128, -64, -32, -16, -8, -4, -2, -1};
 
@@ -135,8 +132,7 @@ void k053260_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
 	INT8 ppcm_data[4];
 	int dataL, dataR;
 	INT8 d;
-	//k053260_state *ic = (k053260_state *)param;
-	k053260_state *ic = &K053260Data[ChipID];
+	k053260_state *ic = (k053260_state *)param;
 
 	/* precache some values */
 	for ( i = 0; i < 4; i++ ) {
@@ -236,7 +232,7 @@ void k053260_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
 }
 
 //static DEVICE_START( k053260 )
-int device_start_k053260(UINT8 ChipID, int clock)
+int device_start_k053260(void **_info, int clock)
 {
 	//static const k053260_interface defintrf = { 0 };
 	//k053260_state *ic = get_safe_token(device);
@@ -245,10 +241,8 @@ int device_start_k053260(UINT8 ChipID, int clock)
 	int rate = clock / 32;
 	int i;
 
-	if (ChipID >= MAX_CHIPS)
-		return 0;
-	
-	ic = &K053260Data[ChipID];
+	ic = (k053260_state *) calloc(1, sizeof(k053260_state));
+	*_info = (void *) ic;	
 	
 	/* Initialize our chip structure */
 	//ic->device = device;
@@ -302,17 +296,19 @@ int device_start_k053260(UINT8 ChipID, int clock)
 	
 	for (i = 0; i < 4; i ++)
 		ic->channels[i].Muted = 0x00;
-	
+
 	return rate;
 }
 
-void device_stop_k053260(UINT8 ChipID)
+void device_stop_k053260(void *_info)
 {
-	k053260_state *ic = &K053260Data[ChipID];
+	k053260_state *ic = (k053260_state *)_info;
 	
 	free(ic->delta_table);
 	free(ic->rom);	ic->rom = NULL;
-	
+
+	free(ic);	
+
 	return;
 }
 
@@ -339,14 +335,14 @@ INLINE void check_bounds( k053260_state *ic, int channel )
 }
 
 //WRITE8_DEVICE_HANDLER( k053260_w )
-void k053260_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void k053260_w(void *_info, offs_t offset, UINT8 data)
 {
 	int i, t;
 	int r = offset;
 	int v = data;
 
 	//k053260_state *ic = get_safe_token(device);
-	k053260_state *ic = &K053260Data[ChipID];
+	k053260_state *ic = (k053260_state *)_info;
 
 	if ( r > 0x2f ) {
 		logerror("K053260: Writing past registers\n" );
@@ -458,10 +454,10 @@ void k053260_w(UINT8 ChipID, offs_t offset, UINT8 data)
 }
 
 //READ8_DEVICE_HANDLER( k053260_r )
-UINT8 k053260_r(UINT8 ChipID, offs_t offset)
+UINT8 k053260_r(void *_info, offs_t offset)
 {
 	//k053260_state *ic = get_safe_token(device);
-	k053260_state *ic = &K053260Data[ChipID];
+	k053260_state *ic = (k053260_state *)_info;
 
 	switch ( offset ) {
 		case 0x29: /* channel status */
@@ -497,10 +493,10 @@ UINT8 k053260_r(UINT8 ChipID, offs_t offset)
 	return ic->regs[offset];
 }
 
-void k053260_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
+void k053260_write_rom(void *_info, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
 					   const UINT8* ROMData)
 {
-	k053260_state *info = &K053260Data[ChipID];
+	k053260_state *info = (k053260_state *)_info;
 	
 	if (info->rom_size != ROMSize)
 	{
@@ -519,9 +515,9 @@ void k053260_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t Da
 }
 
 
-void k053260_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
+void k053260_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-	k053260_state *info = &K053260Data[ChipID];
+	k053260_state *info = (k053260_state *)_info;
 	UINT8 CurChn;
 	
 	for (CurChn = 0; CurChn < 4; CurChn ++)

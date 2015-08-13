@@ -17,6 +17,7 @@
 
 //#include "vb.h"
 #include <memory.h>
+#include <stdlib.h>
 #include "mamedef.h"
 #include "vsu.h"
 
@@ -84,12 +85,6 @@ static void VSU_Update(vsu_state* chip, INT32 timestamp, int* outleft, int* outr
 
 static const int Tap_LUT[8] = { 15 - 1, 11 - 1, 14 - 1, 5 - 1, 9 - 1, 7 - 1, 10 - 1, 12 - 1 };
 
-extern UINT32 SampleRate;
-extern UINT8 CHIP_SAMPLING_MODE;
-extern INT32 CHIP_SAMPLE_RATE;
-#define MAX_CHIPS	0x02
-static vsu_state VSUData[MAX_CHIPS];
-
 static void VSU_Power(vsu_state* chip)
 {
 	int ch;
@@ -131,9 +126,9 @@ static void VSU_Power(vsu_state* chip)
 	chip->last_ts = 0;
 }
 
-void VSU_Write(UINT8 ChipID, UINT32 A, UINT8 V)
+void VSU_Write(void *_info, UINT32 A, UINT8 V)
 {
-	vsu_state* chip = &VSUData[ChipID];
+	vsu_state* chip = (vsu_state *)_info;
 	
 	A <<= 2;
 	A &= 0x7FF;
@@ -564,9 +559,9 @@ static void VSU_Update(vsu_state* chip, INT32 timestamp, int* outleft, int* outr
 }*/
 
 
-void vsu_stream_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void vsu_stream_update(void *_info, stream_sample_t **outputs, int samples)
 {
-	vsu_state* chip = &VSUData[ChipID];
+	vsu_state* chip = (vsu_state *)_info;
 	int curSmpl;
 	
 	for (curSmpl = 0; curSmpl < samples; curSmpl ++)
@@ -593,15 +588,14 @@ void vsu_stream_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
 	return;
 }
 
-int device_start_vsu(UINT8 ChipID, int clock)
+int device_start_vsu(void **_info, int clock, int CHIP_SAMPLING_MODE, int CHIP_SAMPLE_RATE)
 {
 	vsu_state* chip;
 	UINT8 CurChn;
 	
-	if (ChipID >= MAX_CHIPS)
-		return 0;
-	
-	chip = &VSUData[ChipID];
+	chip = (vsu_state *) calloc(1, sizeof(vsu_state));
+	*_info = (void *) chip;
+
 	chip->clock = clock;
 	chip->smplrate = chip->clock / 120;	// most effects run with a /120 divider
 	if (((CHIP_SAMPLING_MODE & 0x01) && chip->smplrate < CHIP_SAMPLE_RATE) ||
@@ -614,14 +608,14 @@ int device_start_vsu(UINT8 ChipID, int clock)
 	return chip->smplrate; 
 }
 
-void device_stop_vsu(UINT8 ChipID)
+void device_stop_vsu(void *chip)
 {
-	vsu_state* chip = &VSUData[ChipID];
+	free(chip);
 }
 
-void device_reset_vsu(UINT8 ChipID)
+void device_reset_vsu(void *_info)
 {
-	vsu_state* chip = &VSUData[ChipID];
+	vsu_state* chip = (vsu_state *)_info;
 	
 	VSU_Power(chip);
 	chip->tm_smpl = 0;
@@ -630,11 +624,9 @@ void device_reset_vsu(UINT8 ChipID)
 	return;
 }
 
-//void vsu_set_options(UINT16 Options);
-
-void vsu_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
+void vsu_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-	vsu_state* chip = &VSUData[ChipID];
+	vsu_state* chip = (vsu_state *)_info;
 	UINT8 CurChn;
 	
 	for (CurChn = 0; CurChn < 6; CurChn ++)

@@ -15,18 +15,18 @@ struct _k053260_interface {
 };*/
 
 
-void k053260_update(UINT8 ChipID, stream_sample_t **outputs, int samples);
-int device_start_k053260(UINT8 ChipID, int clock);
-void device_stop_k053260(UINT8 ChipID);
-void device_reset_k053260(UINT8 ChipID);
+void k053260_update(void *chip, stream_sample_t **outputs, int samples);
+int device_start_k053260(void **chip, int clock);
+void device_stop_k053260(void *chip);
+void device_reset_k053260(void *chip);
 
 //WRITE8_DEVICE_HANDLER( k053260_w );
 //READ8_DEVICE_HANDLER( k053260_r );
-void k053260_w(UINT8 ChipID, offs_t offset, UINT8 data);
-UINT8 k053260_r(UINT8 ChipID, offs_t offset);
+void k053260_w(void *chip, offs_t offset, UINT8 data);
+UINT8 k053260_r(void *chip, offs_t offset);
 
-void k053260_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
+void k053260_write_rom(void *chip, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
 					   const UINT8* ROMData);
-void k053260_set_mute_mask(UINT8 ChipID, UINT32 MuteMask);
+void k053260_set_mute_mask(void *chip, UINT32 MuteMask);
 
 //DECLARE_LEGACY_SOUND_DEVICE(K053260, k053260);

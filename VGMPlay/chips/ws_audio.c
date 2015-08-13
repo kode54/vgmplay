@@ -1,5 +1,5 @@
 
-#include <malloc.h>
+#include <stdlib.h>
 #include <memory.h>
 #include <stddef.h>	// for NULL
 #include "mamedef.h"
@@ -93,22 +93,13 @@ static void ws_audio_process(wsa_state* chip);
 
 
 
-extern UINT8 CHIP_SAMPLING_MODE;
-extern INT32 CHIP_SAMPLE_RATE;
-extern UINT32 SampleRate;
-
-#define MAX_CHIPS	0x02
-static wsa_state WSAData[MAX_CHIPS];
-
-int ws_audio_init(UINT8 ChipID, int clock)
+int ws_audio_init(void **_info, int clock, int SampleRate, int CHIP_SAMPLING_MODE, int CHIP_SAMPLE_RATE)
 {
 	wsa_state* chip;
 	UINT8 CurChn;
 	
-	if (ChipID >= MAX_CHIPS)
-		return 0;
-	
-	chip = &WSAData[ChipID];
+	chip = (wsa_state *) calloc(1, sizeof(wsa_state));
+	*_info = (void *) chip;
 	
 	chip->ws_internalRam = (UINT8*)malloc(0x4000);	// actual size is 64 KB, but the audio chip can only access 16 KB
 	
@@ -124,9 +115,9 @@ int ws_audio_init(UINT8 ChipID, int clock)
 	return chip->smplrate; 
 }
 
-void ws_audio_reset(UINT8 ChipID)
+void ws_audio_reset(void *_info)
 {
-	wsa_state* chip = &WSAData[ChipID];
+	wsa_state* chip = (wsa_state *)_info;
 	int i;
 	
 	memset(&chip->ws_audio, 0, sizeof(WS_AUDIO));
@@ -142,22 +133,24 @@ void ws_audio_reset(UINT8 ChipID)
 	chip->sweepOffset = 0;
 	
 	for (i=0x80;i<0xc9;i++)
-		ws_audio_port_write(ChipID, i, initialIoValue[i]);
+		ws_audio_port_write(chip, i, initialIoValue[i]);
 }
 
-void ws_audio_done(UINT8 ChipID)
+void ws_audio_done(void *_info)
 {
-	wsa_state* chip = &WSAData[ChipID];
+	wsa_state* chip = (wsa_state *)_info;
 	
 	free(chip->ws_internalRam);
 	chip->ws_internalRam = NULL;
+
+	free(chip);
 	
 	return;
 }
 
-void ws_audio_update(UINT8 ChipID, stream_sample_t** buffer, int length)
+void ws_audio_update(void *_info, stream_sample_t** buffer, int length)
 {
-	wsa_state* chip = &WSAData[ChipID];
+	wsa_state* chip = (wsa_state *)_info;
 	stream_sample_t* bufL;
 	stream_sample_t* bufR;
 	int i, ch, cnt;
@@ -284,9 +277,9 @@ void ws_audio_update(UINT8 ChipID, stream_sample_t** buffer, int length)
 	}
 }
 
-void ws_audio_port_write(UINT8 ChipID, BYTE port, BYTE value)
+void ws_audio_port_write(void *_info, BYTE port, BYTE value)
 {
-	wsa_state* chip = &WSAData[ChipID];
+	wsa_state* chip = (wsa_state *)_info;
 	int i;
 	long freq;
 
@@ -396,9 +389,9 @@ void ws_audio_port_write(UINT8 ChipID, BYTE port, BYTE value)
 	}
 }
 
-BYTE ws_audio_port_read(UINT8 ChipID, BYTE port)
+BYTE ws_audio_port_read(void *_info, BYTE port)
 {
-	wsa_state* chip = &WSAData[ChipID];
+	wsa_state* chip = (wsa_state *)_info;
 	return (chip->ws_ioRam[port]);
 }
 
@@ -457,9 +450,9 @@ static void ws_audio_process(wsa_state* chip)
 	}
 }*/
 
-void ws_write_ram(UINT8 ChipID, UINT16 offset, UINT8 value)
+void ws_write_ram(void *_info, UINT16 offset, UINT8 value)
 {
-	wsa_state* chip = &WSAData[ChipID];
+	wsa_state* chip = (wsa_state *)_info;
 	
 	// RAM - 16 KB (WS) / 64 KB (WSC) internal RAM
 	if (offset >= 0x4000)
@@ -469,9 +462,9 @@ void ws_write_ram(UINT8 ChipID, UINT16 offset, UINT8 value)
 	return;
 }
 
-void ws_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
+void ws_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-	wsa_state* chip = &WSAData[ChipID];
+	wsa_state* chip = (wsa_state *)_info;
 	UINT8 CurChn;
 	
 	for (CurChn = 0; CurChn < 4; CurChn ++)

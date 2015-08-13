@@ -8,7 +8,7 @@
 *********************************************************/
 
 //#include "emu.h"
-#include <malloc.h>
+#include <stdlib.h>
 #include <memory.h>
 #include <math.h>
 #include "mamedef.h"
@@ -98,9 +98,6 @@ struct _k054539_state {
 	int clock;
 };
 
-#define MAX_CHIPS	0x02
-static k054539_state K054539Data[MAX_CHIPS];
-
 /*INLINE k054539_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
@@ -111,18 +108,18 @@ static k054539_state K054539Data[MAX_CHIPS];
 //*
 
 //void k054539_init_flags(device_t *device, int flags)
-void k054539_init_flags(UINT8 ChipID, int flags)
+void k054539_init_flags(void *_info, int flags)
 {
 	//k054539_state *info = get_safe_token(device);
-	k054539_state *info = &K054539Data[ChipID];
+	k054539_state *info = (k054539_state *)_info;
 	info->k054539_flags = flags;
 }
 
 //void k054539_set_gain(device_t *device, int channel, double gain)
-void k054539_set_gain(UINT8 ChipID, int channel, double gain)
+void k054539_set_gain(void *_info, int channel, double gain)
 {
 	//k054539_state *info = get_safe_token(device);
-	k054539_state *info = &K054539Data[ChipID];
+	k054539_state *info = (k054539_state *)_info;
 	if (gain >= 0) info->k054539_gain[channel] = gain;
 }
 //*
@@ -145,10 +142,9 @@ static void k054539_keyoff(k054539_state *info, int channel)
 }
 
 //static STREAM_UPDATE( k054539_update )
-void k054539_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void k054539_update(void *param, stream_sample_t **outputs, int samples)
 {
-	//k054539_state *info = (k054539_state *)param;
-	k054539_state *info = &K054539Data[ChipID];
+	k054539_state *info = (k054539_state *)param;
 #define VOL_CAP 1.80
 
 	static const INT16 dpcm[16] = {
@@ -414,10 +410,10 @@ static int k054539_init_chip(k054539_state *info, int clock)
 }
 
 //WRITE8_DEVICE_HANDLER( k054539_w )
-void k054539_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void k054539_w(void *_info, offs_t offset, UINT8 data)
 {
 	//k054539_state *info = get_safe_token(device);
-	k054539_state *info = &K054539Data[ChipID];
+	k054539_state *info = (k054539_state *)_info;
 
 #if 0
 	int voice, reg;
@@ -565,10 +561,10 @@ static void reset_zones(k054539_state *info)
 }
 
 //READ8_DEVICE_HANDLER( k054539_r )
-UINT8 k054539_r(UINT8 ChipID, offs_t offset)
+UINT8 k054539_r(void *_info, offs_t offset)
 {
 	//k054539_state *info = get_safe_token(device);
-	k054539_state *info = &K054539Data[ChipID];
+	k054539_state *info = (k054539_state *)_info;
 	switch(offset) {
 	case 0x22d:
 		if(info->regs[0x22f] & 0x10) {
@@ -589,17 +585,15 @@ UINT8 k054539_r(UINT8 ChipID, offs_t offset)
 }
 
 //static DEVICE_START( k054539 )
-int device_start_k054539(UINT8 ChipID, int clock)
+int device_start_k054539(void **_info, int clock)
 {
 	//static const k054539_interface defintrf = { 0 };
 	int i;
 	//k054539_state *info = get_safe_token(device);
 	k054539_state *info;
 
-	if (ChipID >= MAX_CHIPS)
-		return 0;
-	
-	info = &K054539Data[ChipID];
+	info = (k054539_state *) calloc(1, sizeof(k054539_state));
+	*_info = (void *) info;
 	//info->device = device;
 
 	for (i = 0; i < 8; i++)
@@ -636,23 +630,25 @@ int device_start_k054539(UINT8 ChipID, int clock)
 	
 	for (i = 0; i < 8; i ++)
 		info->Muted[i] = 0x00;
-	
+
 	return k054539_init_chip(info, clock);
 }
 
-void device_stop_k054539(UINT8 ChipID)
+void device_stop_k054539(void *_info)
 {
-	k054539_state *info = &K054539Data[ChipID];
+	k054539_state *info = (k054539_state *)_info;
 	
 	free(info->rom);	info->rom = NULL;
 	free(info->ram);	info->ram = NULL;
+
+	free(info);
 	
 	return;
 }
 
-void device_reset_k054539(UINT8 ChipID)
+void device_reset_k054539(void *_info)
 {
-	k054539_state *info = &K054539Data[ChipID];
+	k054539_state *info = (k054539_state *)_info;
 	
 	memset(info->regs, 0, sizeof(info->regs));
 	memset(info->k054539_posreg_latch, 0, sizeof(info->k054539_posreg_latch));
@@ -665,10 +661,10 @@ void device_reset_k054539(UINT8 ChipID)
 	return;
 }
 
-void k054539_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
+void k054539_write_rom(void *_info, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
 					   const UINT8* ROMData)
 {
-	k054539_state *info = &K054539Data[ChipID];
+	k054539_state *info = (k054539_state *)_info;
 	
 	if (info->rom_size != ROMSize)
 	{
@@ -699,9 +695,9 @@ void k054539_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t Da
 }
 
 
-void k054539_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
+void k054539_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-	k054539_state *info = &K054539Data[ChipID];
+	k054539_state *info = (k054539_state *)_info;
 	UINT8 CurChn;
 	
 	for (CurChn = 0; CurChn < 8; CurChn ++)

@@ -6,7 +6,7 @@
 
 #include "mamedef.h"
 #include <memory.h>	// for memset
-#include <malloc.h>	// for free
+#include <stdlib.h>	// for free
 #include <stddef.h>	// for NULL
 #include "../stdbool.h"
 //#include "sndintrf.h"
@@ -32,26 +32,16 @@ struct _nes_state
 	void* chip_dmc;
 	void* chip_fds;
 	UINT8* Memory;
+	int EMU_CORE;
 };
 
-extern UINT8 CHIP_SAMPLING_MODE;
-extern INT32 CHIP_SAMPLE_RATE;
-static UINT8 EMU_CORE = 0x00;
-
-extern UINT32 SampleRate;
-#define MAX_CHIPS	0x02
-static nes_state NESAPUData[MAX_CHIPS];
-static UINT16 NesOptions = 0x8000;
-
-static void nes_set_chip_option(UINT8 ChipID);
-
-void nes_stream_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void nes_stream_update(void *_info, stream_sample_t **outputs, int samples)
 {
-	nes_state *info = &NESAPUData[ChipID];
+	nes_state *info = (nes_state *)_info;
 	int CurSmpl;
 	INT32 Buffer[4];
 	
-	switch(EMU_CORE)
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -82,19 +72,27 @@ void nes_stream_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
 	return;
 }
 
-int device_start_nes(UINT8 ChipID, int clock)
+static void nes_set_chip_option(nes_state *info, int NesOptions);
+int device_start_nes(void **_info, int EMU_CORE, int clock, int Options, int CHIP_SAMPLING_MODE, int CHIP_SAMPLE_RATE)
 {
 	nes_state *info;
 	int rate;
 	bool EnableFDS;
-	
-	if (ChipID >= MAX_CHIPS)
-		return 0;
+
+#ifdef ENABLE_ALL_CORES
+	if (EMU_CORE >= 0x02)
+		EMU_CORE = EC_NSFPLAY;
+#else
+	EMU_CORE = EC_NSFPLAY;
+#endif
 	
 	EnableFDS = (clock >> 31) & 0x01;
 	clock &= 0x7FFFFFFF;
 	
-	info = &NESAPUData[ChipID];
+	info = (nes_state *) calloc(1, sizeof(nes_state));
+	*_info = (void *) info;
+	
+	info->EMU_CORE = EMU_CORE;
 	rate = clock / 4;
 	if (((CHIP_SAMPLING_MODE & 0x01) && rate < CHIP_SAMPLE_RATE) ||
 		CHIP_SAMPLING_MODE == 0x02)
@@ -146,15 +144,15 @@ int device_start_nes(UINT8 ChipID, int clock)
 	{
 		info->chip_fds = NULL;
 	}
-	nes_set_chip_option(ChipID);
-	
+	nes_set_chip_option(info, Options);
+
 	return rate;
 }
 
-void device_stop_nes(UINT8 ChipID)
+void device_stop_nes(void *_info)
 {
-	nes_state *info = &NESAPUData[ChipID];
-	switch(EMU_CORE)
+	nes_state *info = (nes_state *)_info;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -177,14 +175,16 @@ void device_stop_nes(UINT8 ChipID)
 	info->chip_apu = NULL;
 	info->chip_dmc = NULL;
 	info->chip_fds = NULL;
-	
+
+	free(info);	
+
 	return;
 }
 
-void device_reset_nes(UINT8 ChipID)
+void device_reset_nes(void *_info)
 {
-	nes_state *info = &NESAPUData[ChipID];
-	switch(EMU_CORE)
+	nes_state *info = (nes_state *)_info;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -201,14 +201,14 @@ void device_reset_nes(UINT8 ChipID)
 }
 
 
-void nes_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void nes_w(void *_info, offs_t offset, UINT8 data)
 {
-	nes_state *info = &NESAPUData[ChipID];
+	nes_state *info = (nes_state *)_info;
 	
 	switch(offset & 0xE0)
 	{
 	case 0x00:	// NES APU
-		switch(EMU_CORE)
+		switch(info->EMU_CORE)
 		{
 #ifdef ENABLE_ALL_CORES
 		case EC_MAME:
@@ -239,9 +239,9 @@ void nes_w(UINT8 ChipID, offs_t offset, UINT8 data)
 	}
 }
 
-void nes_write_ram(UINT8 ChipID, offs_t DataStart, offs_t DataLength, const UINT8* RAMData)
+void nes_write_ram(void *_info, offs_t DataStart, offs_t DataLength, const UINT8* RAMData)
 {
-	nes_state* info = &NESAPUData[ChipID];
+	nes_state* info = (nes_state *)_info;
 	UINT32 RemainBytes;
 	
 	if (DataStart >= 0x10000)
@@ -277,33 +277,14 @@ void nes_write_ram(UINT8 ChipID, offs_t DataStart, offs_t DataLength, const UINT
 }
 
 
-void nes_set_emu_core(UINT8 Emulator)
+static void nes_set_chip_option(nes_state *info, int NesOptions)
 {
-#ifdef ENABLE_ALL_CORES
-	EMU_CORE = (Emulator < 0x02) ? Emulator : 0x00;
-#else
-	EMU_CORE = EC_NSFPLAY;
-#endif
-	
-	return;
-}
-
-void nes_set_options(UINT16 Options)
-{
-	NesOptions = Options;
-	
-	return;
-}
-
-static void nes_set_chip_option(UINT8 ChipID)
-{
-	nes_state *info = &NESAPUData[ChipID];
 	UINT8 CurOpt;
 	
 	if (NesOptions & 0x8000)
 		return;
 	
-	switch(EMU_CORE)
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -336,10 +317,10 @@ static void nes_set_chip_option(UINT8 ChipID)
 	return;
 }
 
-void nes_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
+void nes_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-	nes_state *info = &NESAPUData[ChipID];
-	switch(EMU_CORE)
+	nes_state *info = (nes_state *)_info;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:

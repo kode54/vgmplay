@@ -20,39 +20,38 @@ typedef struct waveform_32bit_stereo
 } WAVE_32BS;
 
 
-void VGMPlay_Init(void);
-void VGMPlay_Init2(void);
-void VGMPlay_Deinit(void);
+void * VGMPlay_Init(void);
+void VGMPlay_Init2(void* vgmp);
+void VGMPlay_Deinit(void* vgmp);
 char* FindFile(const char* FileName);
 
 UINT32 GetGZFileLength(const char* FileName);
-bool OpenVGMFile(const char* FileName);
-void CloseVGMFile(void);
+bool OpenVGMFile(void* vgmp, const char* FileName);
+void CloseVGMFile(void* vgmp);
 
 void FreeGD3Tag(GD3_TAG* TagData);
 UINT32 GetVGMFileInfo(const char* FileName, VGM_HEADER* RetVGMHead, GD3_TAG* RetGD3Tag);
-UINT32 CalcSampleMSec(UINT64 Value, UINT8 Mode);
-UINT32 CalcSampleMSecExt(UINT64 Value, UINT8 Mode, VGM_HEADER* FileHead);
+UINT32 CalcSampleMSec(void* vgmp, UINT64 Value, UINT8 Mode);
+UINT32 CalcSampleMSecExt(void* vgmp, UINT64 Value, UINT8 Mode, VGM_HEADER* FileHead);
 const char* GetChipName(UINT8 ChipID);
 const char* GetAccurateChipName(UINT8 ChipID, UINT8 SubType);
-UINT32 GetChipClock(VGM_HEADER* FileHead, UINT8 ChipID, UINT8* RetSubType);
+UINT32 GetChipClock(void* vgmp, UINT8 ChipID, UINT8* RetSubType);
 
 #ifndef NO_WCHAR_FILENAMES
 UINT32 GetGZFileLengthW(const wchar_t* FileName);
-bool OpenVGMFileW(const wchar_t* FileName);
+bool OpenVGMFileW(void* vgmp, const wchar_t* FileName);
 UINT32 GetVGMFileInfoW(const wchar_t* FileName, VGM_HEADER* RetVGMHead, GD3_TAG* RetGD3Tag);
 #endif
 
-INT32 SampleVGM2Playback(INT32 SampleVal);
-INT32 SamplePlayback2VGM(INT32 SampleVal);
+INT32 SampleVGM2Playback(void* vgmp, INT32 SampleVal);
+INT32 SamplePlayback2VGM(void* vgmp, INT32 SampleVal);
 
-void PlayVGM(void);
-void StopVGM(void);
-void RestartVGM(void);
-void PauseVGM(bool Pause);
-void SeekVGM(bool Relative, INT32 PlayBkSamples);
-void RefreshMuting(void);
-void RefreshPanning(void);
-void RefreshPlaybackOptions(void);
+void PlayVGM(void* vgmp);
+void StopVGM(void* vgmp);
+void RestartVGM(void* vgmp);
+void SeekVGM(void* vgmp, bool Relative, INT32 PlayBkSamples);
+void RefreshMuting(void* vgmp);
+void RefreshPanning(void* vgmp);
+void RefreshPlaybackOptions(void* vgmp);
 
-UINT32 FillBuffer(WAVE_16BS* Buffer, UINT32 BufferSize);
+UINT32 FillBuffer(void* vgmp, WAVE_16BS* Buffer, UINT32 BufferSize);

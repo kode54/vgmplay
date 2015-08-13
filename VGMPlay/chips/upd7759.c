@@ -103,7 +103,7 @@
 #include <stdio.h>
 #endif
 #include <memory.h>
-#include <malloc.h>
+#include <stdlib.h>
 #include "mamedef.h"
 #include "upd7759.h"
 
@@ -245,9 +245,6 @@ static const int upd7759_state_table[16] = { -1, -1, 0, 0, 1, 2, 2, 3, -1, -1, 0
 	return (upd7759_state *)downcast<legacy_device_base *>(device)->token();
 }*/
 
-
-#define MAX_CHIPS	0x02
-static upd7759_state UPD7759Data[MAX_CHIPS];
 
 /************************************************************
 
@@ -505,10 +502,9 @@ static void advance_state(upd7759_state *chip)
 *************************************************************/
 
 //static STREAM_UPDATE( upd7759_update )
-void upd7759_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void upd7759_update(void *param, stream_sample_t **outputs, int samples)
 {
-	//upd7759_state *chip = (upd7759_state *)param;
-	upd7759_state *chip = &UPD7759Data[ChipID];
+	upd7759_state *chip = (upd7759_state *)param;
 	INT32 clocks_left = chip->clocks_left;
 	INT16 sample = chip->sample;
 	UINT32 step = chip->step;
@@ -663,9 +659,9 @@ static void upd7759_reset(upd7759_state *chip)
 
 
 //static DEVICE_RESET( upd7759 )
-void device_reset_upd7759(UINT8 ChipID)
+void device_reset_upd7759(void *_info)
 {
-	upd7759_state *chip = &UPD7759Data[ChipID];
+	upd7759_state *chip = (upd7759_state *)_info;
 	//upd7759_reset(get_safe_token(device));
 	upd7759_reset(chip);
 }
@@ -713,7 +709,7 @@ static void upd7759_postload(void* param)
 
 
 //static DEVICE_START( upd7759 )
-int device_start_upd7759(UINT8 ChipID, int clock)
+int device_start_upd7759(void **_info, int clock)
 {
 	static const upd7759_interface defintrf = { 0 };
 	//const upd7759_interface *intf = (device->baseconfig().static_config() != NULL) ? (const upd7759_interface *)device->baseconfig().static_config() : &defintrf;
@@ -721,10 +717,9 @@ int device_start_upd7759(UINT8 ChipID, int clock)
 	//upd7759_state *chip = get_safe_token(device);
 	upd7759_state *chip;
 
-	if (ChipID >= MAX_CHIPS)
-		return 0;
+	chip = (upd7759_state *) calloc(1, sizeof(upd7759_state));
+	*_info = (void *) chip;
 	
-	chip = &UPD7759Data[ChipID];
 	//chip->device = device;
 	chip->ChipMode = (clock & 0x80000000) >> 31;
 	clock &= 0x7FFFFFFF;
@@ -760,16 +755,18 @@ int device_start_upd7759(UINT8 ChipID, int clock)
 	upd7759_reset(chip);
 
 	//register_for_save(chip, device);
-	
+
 	return clock / 4;
 }
 
-void device_stop_upd7759(UINT8 ChipID)
+void device_stop_upd7759(void *_info)
 {
-	upd7759_state *chip = &UPD7759Data[ChipID];
+	upd7759_state *chip = (upd7759_state *)_info;
 	
 	free(chip->rombase);	chip->rombase = NULL;
-	
+
+	free(chip);	
+
 	return;
 }
 
@@ -782,11 +779,11 @@ void device_stop_upd7759(UINT8 ChipID)
 *************************************************************/
 
 //void upd7759_reset_w(running_device *device, UINT8 data)
-void upd7759_reset_w(UINT8 ChipID, UINT8 data)
+void upd7759_reset_w(void *_info, UINT8 data)
 {
 	/* update the reset value */
 	//upd7759_state *chip = get_safe_token(device);
-	upd7759_state *chip = &UPD7759Data[ChipID];
+	upd7759_state *chip = (upd7759_state *)_info;
 	UINT8 oldreset = chip->reset;
 	chip->reset = (data != 0);
 
@@ -799,11 +796,11 @@ void upd7759_reset_w(UINT8 ChipID, UINT8 data)
 }
 
 //void upd7759_start_w(running_device *device, UINT8 data)
-void upd7759_start_w(UINT8 ChipID, UINT8 data)
+void upd7759_start_w(void *_info, UINT8 data)
 {
 	/* update the start value */
 	//upd7759_state *chip = get_safe_token(device);
-	upd7759_state *chip = &UPD7759Data[ChipID];
+	upd7759_state *chip = (upd7759_state *)_info;
 	UINT8 oldstart = chip->start;
 	chip->start = (data != 0);
 
@@ -826,11 +823,11 @@ void upd7759_start_w(UINT8 ChipID, UINT8 data)
 
 
 //WRITE8_DEVICE_HANDLER( upd7759_port_w )
-void upd7759_port_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void upd7759_port_w(void *_info, offs_t offset, UINT8 data)
 {
 	/* update the FIFO value */
 	//upd7759_state *chip = get_safe_token(device);
-	upd7759_state *chip = &UPD7759Data[ChipID];
+	upd7759_state *chip = (upd7759_state *)_info;
 	
 	if (! chip->ChipMode)
 	{
@@ -847,49 +844,49 @@ void upd7759_port_w(UINT8 ChipID, offs_t offset, UINT8 data)
 
 
 //int upd7759_busy_r(running_device *device)
-int upd7759_busy_r(UINT8 ChipID)
+int upd7759_busy_r(void *_info)
 {
 	/* return /BUSY */
 	//upd7759_state *chip = get_safe_token(device);
-	upd7759_state *chip = &UPD7759Data[ChipID];
+	upd7759_state *chip = (upd7759_state *)_info;
 	return (chip->state == STATE_IDLE);
 }
 
 
 //void upd7759_set_bank_base(running_device *device, UINT32 base)
-void upd7759_set_bank_base(UINT8 ChipID, UINT32 base)
+void upd7759_set_bank_base(void *_info, UINT32 base)
 {
 	//upd7759_state *chip = get_safe_token(device);
-	upd7759_state *chip = &UPD7759Data[ChipID];
+	upd7759_state *chip = (upd7759_state *)_info;
 	chip->rom = chip->rombase + base;
 	chip->romoffset = base;
 }
 
-void upd7759_write(UINT8 ChipID, UINT8 Port, UINT8 Data)
+void upd7759_write(void *info, UINT8 Port, UINT8 Data)
 {
 	switch(Port)
 	{
 	case 0x00:
-		upd7759_reset_w(ChipID, Data);
+		upd7759_reset_w(info, Data);
 		break;
 	case 0x01:
-		upd7759_start_w(ChipID, Data);
+		upd7759_start_w(info, Data);
 		break;
 	case 0x02:
-		upd7759_port_w(ChipID, 0x00, Data);
+		upd7759_port_w(info, 0x00, Data);
 		break;
 	case 0x03:
-		upd7759_set_bank_base(ChipID, Data * 0x20000);
+		upd7759_set_bank_base(info, Data * 0x20000);
 		break;
 	}
 	
 	return;
 }
 
-void upd7759_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
+void upd7759_write_rom(void *_info, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
 					   const UINT8* ROMData)
 {
-	upd7759_state *chip = &UPD7759Data[ChipID];
+	upd7759_state *chip = (upd7759_state *)_info;
 	
 	if (chip->romsize != ROMSize)
 	{

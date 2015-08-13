@@ -29,27 +29,26 @@ WRITE8_DEVICE_HANDLER( ym2608_data_port_b_w );
 DEVICE_GET_INFO( ym2608 );
 #define SOUND_YM2608 DEVICE_GET_INFO_NAME( ym2608 )*/
 
-void ym2608_stream_update(UINT8 ChipID, stream_sample_t **outputs, int samples);
-void ym2608_stream_update_ay(UINT8 ChipID, stream_sample_t **outputs, int samples);
+void ym2608_stream_update(void *chip, stream_sample_t **outputs, int samples);
+void ym2608_stream_update_ay(void *chip, stream_sample_t **outputs, int samples);
 
-int device_start_ym2608(UINT8 ChipID, int clock, UINT8 AYDisable, UINT8 AYFlags, int* AYrate);
-void device_stop_ym2608(UINT8 ChipID);
-void device_reset_ym2608(UINT8 ChipID);
+int device_start_ym2608(void **chip, int core, int clock, UINT8 AYDisable, UINT8 AYFlags, int* AYrate, int CHIP_SAMPLING_MODE, int CHIP_SAMPLE_RATE);
+void device_stop_ym2608(void *chip);
+void device_reset_ym2608(void *chip);
 
-UINT8 ym2608_r(UINT8 ChipID, offs_t offset);
-void ym2608_w(UINT8 ChipID, offs_t offset, UINT8 data);
+UINT8 ym2608_r(void *chip, offs_t offset);
+void ym2608_w(void *chip, offs_t offset, UINT8 data);
 
-UINT8 ym2608_read_port_r(UINT8 ChipID, offs_t offset);
-UINT8 ym2608_status_port_a_r(UINT8 ChipID, offs_t offset);
-UINT8 ym2608_status_port_b_r(UINT8 ChipID, offs_t offset);
+UINT8 ym2608_read_port_r(void *chip, offs_t offset);
+UINT8 ym2608_status_port_a_r(void *chip, offs_t offset);
+UINT8 ym2608_status_port_b_r(void *chip, offs_t offset);
 
-void ym2608_control_port_a_w(UINT8 ChipID, offs_t offset, UINT8 data);
-void ym2608_control_port_b_w(UINT8 ChipID, offs_t offset, UINT8 data);
-void ym2608_data_port_a_w(UINT8 ChipID, offs_t offset, UINT8 data);
-void ym2608_data_port_b_w(UINT8 ChipID, offs_t offset, UINT8 data);
+void ym2608_control_port_a_w(void *chip, offs_t offset, UINT8 data);
+void ym2608_control_port_b_w(void *chip, offs_t offset, UINT8 data);
+void ym2608_data_port_a_w(void *chip, offs_t offset, UINT8 data);
+void ym2608_data_port_b_w(void *chip, offs_t offset, UINT8 data);
 
-void ym2608_set_ay_emu_core(UINT8 Emulator);
-void ym2608_write_data_pcmrom(UINT8 ChipID, UINT8 rom_id, offs_t ROMSize, offs_t DataStart,
+void ym2608_write_data_pcmrom(void *chip, UINT8 rom_id, offs_t ROMSize, offs_t DataStart,
 							  offs_t DataLength, const UINT8* ROMData);
-void ym2608_set_mute_mask(UINT8 ChipID, UINT32 MuteMaskFM, UINT32 MuteMaskAY);
-void ym2608_set_srchg_cb(UINT8 ChipID, SRATE_CALLBACK CallbackFunc, void* DataPtr, void* AYDataPtr);
+void ym2608_set_mute_mask(void *chip, UINT32 MuteMaskFM, UINT32 MuteMaskAY);
+void ym2608_set_srchg_cb(void *chip, SRATE_CALLBACK CallbackFunc, void* DataPtr, void* AYDataPtr);

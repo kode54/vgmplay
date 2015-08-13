@@ -102,11 +102,6 @@ void PWM_Set_Int(pwm_chip* chip, unsigned int int_time);
 void PWM_Update(pwm_chip* chip, int **buf, int length);
 
 
-extern UINT8 CHIP_SAMPLING_MODE;
-extern INT32 CHIP_SAMPLE_RATE;
-#define MAX_CHIPS	0x02
-static pwm_chip PWM_Chip[MAX_CHIPS];
-
 /**
  * PWM_Init(): Initialize the PWM audio emulator.
  */
@@ -340,24 +335,23 @@ void PWM_Update(pwm_chip* chip, int **buf, int length)
 }
 
 
-void pwm_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void pwm_update(void *_info, stream_sample_t **outputs, int samples)
 {
-	pwm_chip *chip = &PWM_Chip[ChipID];
+	pwm_chip *chip = (pwm_chip *)_info;
 	
 	PWM_Update(chip, outputs, samples);
 }
 
-int device_start_pwm(UINT8 ChipID, int clock)
+int device_start_pwm(void **_info, int clock, int CHIP_SAMPLING_MODE, int CHIP_SAMPLE_RATE)
 {
 	/* allocate memory for the chip */
 	//pwm_state *chip = get_safe_token(device);
 	pwm_chip *chip;
 	int rate;
 	
-	if (ChipID >= MAX_CHIPS)
-		return 0;
-	
-	chip = &PWM_Chip[ChipID];
+	chip = (pwm_chip *) calloc(1, sizeof(pwm_chip));
+	*_info = (void *) chip;	
+
 	rate = 22020;	// that's the rate the PWM is mostly used
 	if (((CHIP_SAMPLING_MODE & 0x01) && rate < CHIP_SAMPLE_RATE) ||
 		CHIP_SAMPLING_MODE == 0x02)
@@ -367,27 +361,29 @@ int device_start_pwm(UINT8 ChipID, int clock)
 	PWM_Init(chip);
 	/* allocate the stream */
 	//chip->stream = stream_create(device, 0, 2, device->clock / 384, chip, rf5c68_update);
-	
+
 	return rate;
 }
 
-void device_stop_pwm(UINT8 ChipID)
+void device_stop_pwm(void *_info)
 {
 	//pwm_chip *chip = &PWM_Chip[ChipID];
 	//free(chip->ram);
+
+	free(_info);
 	
 	return;
 }
 
-void device_reset_pwm(UINT8 ChipID)
+void device_reset_pwm(void *_info)
 {
-	pwm_chip *chip = &PWM_Chip[ChipID];
+	pwm_chip *chip = (pwm_chip *)_info;
 	PWM_Init(chip);
 }
 
-void pwm_chn_w(UINT8 ChipID, UINT8 Channel, UINT16 data)
+void pwm_chn_w(void *_info, UINT8 Channel, UINT16 data)
 {
-	pwm_chip *chip = &PWM_Chip[ChipID];
+	pwm_chip *chip = (pwm_chip *)_info;
 	
 	if (chip->clock == 1)
 	{	// old-style commands

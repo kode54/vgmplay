@@ -4,6 +4,7 @@
 
 ****************************************************************/
 
+#include <stdlib.h>
 #include "mamedef.h"
 //#include "sndintrf.h"
 //#include "streams.h"
@@ -24,18 +25,13 @@ typedef struct _sn764xx_state sn764xx_state;
 struct _sn764xx_state
 {
 	void *chip;
+	int EMU_CORE;
 };
 
-static UINT8 EMU_CORE = 0x00;
-
-extern UINT32 SampleRate;
-#define MAX_CHIPS	0x02
-static sn764xx_state SN764xxData[MAX_CHIPS];
-
-void sn764xx_stream_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void sn764xx_stream_update(void *_info, stream_sample_t **outputs, int samples)
 {
-	sn764xx_state *info = &SN764xxData[ChipID];
-	switch(EMU_CORE)
+	sn764xx_state* info = (sn764xx_state*)_info;
+	switch(info->EMU_CORE)
 	{
 	case EC_MAME:
 		SN76496Update(info->chip, outputs, samples);
@@ -48,17 +44,23 @@ void sn764xx_stream_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
 	}
 }
 
-int device_start_sn764xx(UINT8 ChipID, int clock, int shiftregwidth, int noisetaps,
+int device_start_sn764xx(void **_info, int EMU_CORE, int clock, int SampleRate, int shiftregwidth, int noisetaps,
 						 int negate, int stereo, int clockdivider, int freq0)
 {
 	sn764xx_state *info;
 	int rate;
+
+#ifdef ENABLE_ALL_CORES
+	if (EMU_CORE >= 0x02)
+		EMU_CORE = EC_MAME;
+#else
+	EMU_CORE = EC_MAME;
+#endif
 	
-	if (ChipID >= MAX_CHIPS)
-		return 0;
-	
-	info = &SN764xxData[ChipID];
+	info = (sn764xx_state*) calloc(1, sizeof(sn764xx_state));
+	*_info = (void *) info;
 	/* emulator create */
+	info->EMU_CORE = EMU_CORE;
 	switch(EMU_CORE)
 	{
 	case EC_MAME:
@@ -76,14 +78,14 @@ int device_start_sn764xx(UINT8 ChipID, int clock, int shiftregwidth, int noiseta
 		break;
 #endif
 	}
- 
+
 	return rate;
 }
 
-void device_stop_sn764xx(UINT8 ChipID)
+void device_stop_sn764xx(void *_info)
 {
-	sn764xx_state *info = &SN764xxData[ChipID];
-	switch(EMU_CORE)
+	sn764xx_state *info = (sn764xx_state*)_info;
+	switch(info->EMU_CORE)
 	{
 	case EC_MAME:
 		sn76496_shutdown(info->chip);
@@ -96,10 +98,10 @@ void device_stop_sn764xx(UINT8 ChipID)
 	}
 }
 
-void device_reset_sn764xx(UINT8 ChipID)
+void device_reset_sn764xx(void *_info)
 {
-	sn764xx_state *info = &SN764xxData[ChipID];
-	switch(EMU_CORE)
+	sn764xx_state *info = (sn764xx_state*)_info;
+	switch(info->EMU_CORE)
 	{
 	case EC_MAME:
 		sn76496_reset(info->chip);
@@ -113,10 +115,10 @@ void device_reset_sn764xx(UINT8 ChipID)
 }
 
 
-void sn764xx_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void sn764xx_w(void *_info, offs_t offset, UINT8 data)
 {
-	sn764xx_state *info = &SN764xxData[ChipID];
-	switch(EMU_CORE)
+	sn764xx_state *info = (sn764xx_state*)_info;
+	switch(info->EMU_CORE)
 	{
 	case EC_MAME:
 		switch(offset)
@@ -145,21 +147,10 @@ void sn764xx_w(UINT8 ChipID, offs_t offset, UINT8 data)
 	}
 }
 
-void sn764xx_set_emu_core(UINT8 Emulator)
+void sn764xx_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-#ifdef ENABLE_ALL_CORES
-	EMU_CORE = (Emulator < 0x02) ? Emulator : 0x00;
-#else
-	EMU_CORE = EC_MAME;
-#endif
-	
-	return;
-}
-
-void sn764xx_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
-{
-	sn764xx_state *info = &SN764xxData[ChipID];
-	switch(EMU_CORE)
+	sn764xx_state *info = (sn764xx_state*)_info;
+	switch(info->EMU_CORE)
 	{
 	case EC_MAME:
 		sn76496_set_mutemask(info->chip, MuteMask);
@@ -174,10 +165,10 @@ void sn764xx_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
 	return;
 }
 
-void sn764xx_set_panning(UINT8 ChipID, INT16* PanVals)
+void sn764xx_set_panning(void *_info, INT16* PanVals)
 {
-	sn764xx_state *info = &SN764xxData[ChipID];
-	switch(EMU_CORE)
+	sn764xx_state *info = (sn764xx_state*)_info;
+	switch(info->EMU_CORE)
 	{
 	case EC_MAME:
 		break;

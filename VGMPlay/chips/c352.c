@@ -16,7 +16,7 @@
 //#include "emu.h"
 //#include "streams.h"
 #include <math.h>
-#include <malloc.h>
+#include <stdlib.h>
 #include <memory.h>
 #include <stddef.h>	// for NULL
 #include "mamedef.h"
@@ -88,9 +88,6 @@ struct _c352_state
 	short	mulaw_table[256];
 	unsigned int mseq_reg;
 };
-
-#define MAX_CHIPS	0x02
-static c352_state C352Data[MAX_CHIPS];
 
 /*INLINE c352_state *get_safe_token(running_device *device)
 {
@@ -392,10 +389,9 @@ static void c352_mix_one_channel(c352_state *info, unsigned long ch, stream_samp
 
 
 //static STREAM_UPDATE( c352_update )
-void c352_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void c352_update(void *param, stream_sample_t **outputs, int samples)
 {
-	//c352_state *info = (c352_state *)param;
-	c352_state *info = &C352Data[ChipID];
+	c352_state *info = (c352_state *)param;
 	int j;
 	/*stream_sample_t *bufferl = outputs[0];
 	stream_sample_t *bufferr = outputs[1];
@@ -557,7 +553,7 @@ static void c352_write_reg16(c352_state *info, unsigned long address, unsigned s
 }
 
 //static DEVICE_START( c352 )
-int device_start_c352(UINT8 ChipID, int clock, int clkdiv)
+int device_start_c352(void **_info, int clock, int clkdiv)
 {
 	//c352_state *info = get_safe_token(device);
 	c352_state *info;
@@ -566,10 +562,8 @@ int device_start_c352(UINT8 ChipID, int clock, int clkdiv)
 	double y_max = 127.0;
 	double u = 10.0;
 
-	if (ChipID >= MAX_CHIPS)
-		return 0;
-	
-	info = &C352Data[ChipID];
+	info = (c352_state *) calloc(1, sizeof(c352_state));
+	*_info = (void *) info;
 
 	//info->c352_rom_samples = *device->region();
 	//info->c352_rom_length = device->region()->bytes();
@@ -622,19 +616,21 @@ int device_start_c352(UINT8 ChipID, int clock, int clkdiv)
 	return info->sample_rate_base;
 }
 
-void device_stop_c352(UINT8 ChipID)
+void device_stop_c352(void *_info)
 {
-	c352_state *info = &C352Data[ChipID];
+	c352_state *info = (c352_state *)_info;
 	
 	free(info->c352_rom_samples);
 	info->c352_rom_samples = NULL;
+
+	free(info);
 	
 	return;
 }
 
-void device_reset_c352(UINT8 ChipID)
+void device_reset_c352(void *_info)
 {
-	c352_state *info = &C352Data[ChipID];
+	c352_state *info = (c352_state *)_info;
 	
 	// clear all channels states
 	memset(info->c352_ch, 0, sizeof(c352_ch_t)*32);
@@ -647,17 +643,17 @@ void device_reset_c352(UINT8 ChipID)
 
 
 //READ16_DEVICE_HANDLER( c352_r )
-UINT16 c352_r(UINT8 ChipID, offs_t offset)
+UINT16 c352_r(void *_info, offs_t offset)
 {
-	c352_state *info = &C352Data[ChipID];
+	c352_state *info = (c352_state *)_info;
 	return(c352_read_reg16(info, offset*2));
 	//return(c352_read_reg16(get_safe_token(device), offset*2));
 }
 
 //WRITE16_DEVICE_HANDLER( c352_w )
-void c352_w(UINT8 ChipID, offs_t offset, UINT16 data)
+void c352_w(void *_info, offs_t offset, UINT16 data)
 {
-	c352_state *info = &C352Data[ChipID];
+	c352_state *info = (c352_state *)_info;
 	/*if (mem_mask == 0xffff)
 	{
 		c352_write_reg16(get_safe_token(device), offset*2, data);
@@ -670,10 +666,10 @@ void c352_w(UINT8 ChipID, offs_t offset, UINT16 data)
 }
 
 
-void c352_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
+void c352_write_rom(void *_info, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
 					const UINT8* ROMData)
 {
-	c352_state *info = &C352Data[ChipID];
+	c352_state *info = (c352_state *)_info;
 	
 	if (info->c352_rom_length != ROMSize)
 	{
@@ -692,9 +688,9 @@ void c352_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t DataL
 }
 
 
-void c352_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
+void c352_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-	c352_state *info = &C352Data[ChipID];
+	c352_state *info = (c352_state *)_info;
 	UINT8 CurChn;
 	
 	for (CurChn = 0; CurChn < 32; CurChn ++)

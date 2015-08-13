@@ -6,17 +6,8 @@
 #include "chips/mamedef.h"
 #include "stdbool.h"
 #include "VGMPlay.h"
-#include "VGMPlay_Intf.h"
 
 #define SAMPLESIZE sizeof(WAVE_16BS)
-
-UINT8 CmdList[0x100]; // used by VGMPlay.c and VGMPlay_AddFmts.c
-bool ErrorHappened;   // used by VGMPlay.c and VGMPlay_AddFmts.c
-extern VGM_HEADER VGMHead;
-extern UINT32 SampleRate;
-extern UINT32 VGMMaxLoopM;
-extern UINT32 FadeTime;
-extern bool EndPlay;
 
 INLINE int fputBE16(UINT16 Value, FILE* hFile)
 {
@@ -34,16 +25,19 @@ int main(int argc, char *argv[]) {
     WAVE_16BS *sampleBuffer;
     UINT32 bufferedLength;
     FILE *outputFile;
+    void *vgmp;
+    VGM_PLAYER *p;
+    int EndPlay;
 
     if (argc < 3) {
         fputs("usage: vgm2pcm vgm_file pcm_file\n", stderr);
         return 1;
     }
 
-    VGMPlay_Init();
-    VGMPlay_Init2();
+    vgmp = VGMPlay_Init();
+    VGMPlay_Init2(vgmp);
 
-    if (!OpenVGMFile(argv[1])) {
+    if (!OpenVGMFile(vgmp, argv[1])) {
         fprintf(stderr, "vgm2pcm: error: failed to open vgm_file (%s)\n", argv[1]);
         return 1;
     }
@@ -54,35 +48,40 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    PlayVGM();
+    PlayVGM(vgmp);
 
-    sampleBuffer = (WAVE_16BS*)malloc(SAMPLESIZE * SampleRate);
+    p = (VGM_PLAYER *) vgmp;
+    
+    sampleBuffer = (WAVE_16BS*)malloc(SAMPLESIZE * p->SampleRate);
     if (sampleBuffer == NULL) {
-        fprintf(stderr, "vgm2pcm: error: failed to allocate %u bytes of memory\n", SAMPLESIZE * SampleRate);
+        fprintf(stderr, "vgm2pcm: error: failed to allocate %u bytes of memory\n", SAMPLESIZE * p->SampleRate);
         return 1;
     }
 
+    EndPlay = 0;
     while (!EndPlay) {
-        UINT32 bufferSize = SampleRate;
-        bufferedLength = FillBuffer(sampleBuffer, bufferSize);
+        UINT32 bufferSize = p->SampleRate;
+        bufferedLength = FillBuffer(vgmp, sampleBuffer, bufferSize);
         if (bufferedLength) {
             UINT32 numberOfSamples;
             UINT32 currentSample;
             const UINT16* sampleData;
 
-            sampleData = (INT16*)sampleBuffer;
+            sampleData = (UINT16*)sampleBuffer;
             numberOfSamples = SAMPLESIZE * bufferedLength / 0x02;
             for (currentSample = 0x00; currentSample < numberOfSamples; currentSample++) {
                 fputBE16(sampleData[currentSample], outputFile);
             }
         }
+        if (bufferedLength < bufferSize)
+            EndPlay = 1;
     }
 
-    StopVGM();
+    StopVGM(vgmp);
 
-    CloseVGMFile();
+    CloseVGMFile(vgmp);
 
-    VGMPlay_Deinit();
+    VGMPlay_Deinit(vgmp);
 
     return 0;
 }

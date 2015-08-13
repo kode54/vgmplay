@@ -175,16 +175,13 @@ struct _gb_sound_t
 	struct SOUNDC snd_control;
 
 	UINT8 snd_regs[0x30];
+
+	UINT8 LoudWaveChn;
+	UINT8 LowNoiseChn;
+	UINT8 AccuracyHack;
 };
 
 
-extern UINT32 SampleRate;
-#define MAX_CHIPS	0x02
-static gb_sound_t GBSoundData[MAX_CHIPS];
-
-static UINT8 LoudWaveChn = 0x00;
-static UINT8 LowNoiseChn = 0x00;
-static UINT8 AccuracyHack = 0x01;
 
 
 /***************************************************************************
@@ -211,29 +208,29 @@ static UINT8 AccuracyHack = 0x01;
 ***************************************************************************/
 
 //READ8_DEVICE_HANDLER( gb_wave_r )
-UINT8 gb_wave_r(UINT8 ChipID, offs_t offset)
+UINT8 gb_wave_r(void *_info, offs_t offset)
 {
 	//gb_sound_t *gb = get_token(device);
-	gb_sound_t *gb = &GBSoundData[ChipID];
+	gb_sound_t *gb = (gb_sound_t *)_info;
 
 	/* TODO: properly emulate scrambling of wave ram area when playback is active */
 	return ( gb->snd_regs[ AUD3W0 + offset ] | gb->snd_3.on );
 }
 
 //WRITE8_DEVICE_HANDLER( gb_wave_w )
-void gb_wave_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void gb_wave_w(void *_info, offs_t offset, UINT8 data)
 {
 	//gb_sound_t *gb = get_token(device);
-	gb_sound_t *gb = &GBSoundData[ChipID];
+	gb_sound_t *gb = (gb_sound_t *)_info;
 
 	gb->snd_regs[ AUD3W0 + offset ] = data;
 }
 
 //READ8_DEVICE_HANDLER( gb_sound_r )
-UINT8 gb_sound_r(UINT8 ChipID, offs_t offset)
+UINT8 gb_sound_r(void *_info, offs_t offset)
 {
 	//gb_sound_t *gb = get_token(device);
-	gb_sound_t *gb = &GBSoundData[ChipID];
+	gb_sound_t *gb = (gb_sound_t *)_info;
 
 	switch( offset ) {
 	case 0x05:
@@ -454,10 +451,10 @@ static void gb_sound_w_internal(gb_sound_t *gb, int offset, UINT8 data )
 }
 
 //WRITE8_DEVICE_HANDLER( gb_sound_w )
-void gb_sound_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void gb_sound_w(void *_info, offs_t offset, UINT8 data)
 {
 	//gb_sound_t *gb = get_token(device);
-	gb_sound_t *gb = &GBSoundData[ChipID];
+	gb_sound_t *gb = (gb_sound_t *)_info;
 
 	/* change in registers so update first */
 	//stream_update(gb->channel);
@@ -481,10 +478,10 @@ void gb_sound_w(UINT8 ChipID, offs_t offset, UINT8 data)
 
 
 //static STREAM_UPDATE( gameboy_update )
-void gameboy_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void gameboy_update(void *_info, stream_sample_t **outputs, int samples)
 {
 	//gb_sound_t *gb = get_token(device);
-	gb_sound_t *gb = &GBSoundData[ChipID];
+	gb_sound_t *gb = (gb_sound_t *)_info;
 	stream_sample_t *outl = outputs[0];
 	stream_sample_t *outr = outputs[1];
 	stream_sample_t sample, left, right, mode4_mask;
@@ -497,7 +494,7 @@ void gameboy_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
 		if( gb->snd_1.on && ! gb->snd_1.Muted )
 		{
 			sample = gb->snd_1.signal * gb->snd_1.env_value;
-			if (! AccuracyHack)
+			if (! gb->AccuracyHack)
 			{
 				gb->snd_1.pos++;
 				if( gb->snd_1.pos == (UINT32)(gb->snd_1.period / wave_duty_table[gb->snd_1.duty]) >> FIXED_POINT)
@@ -587,7 +584,7 @@ void gameboy_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
 		if( gb->snd_2.on && ! gb->snd_2.Muted )
 		{
 			sample = gb->snd_2.signal * gb->snd_2.env_value;
-			if (! AccuracyHack)
+			if (! gb->AccuracyHack)
 			{
 				gb->snd_2.pos++;
 				if( gb->snd_2.pos == (UINT32)(gb->snd_2.period / wave_duty_table[gb->snd_2.duty]) >> FIXED_POINT)
@@ -656,7 +653,7 @@ void gameboy_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
 				sample >>= 4;
 			}
 			sample = (sample & 0xF) - 8;
-			if (LoudWaveChn)
+			if (gb->LoudWaveChn)
 				sample <<= 1;
 
 			if( gb->snd_3.level )
@@ -664,7 +661,7 @@ void gameboy_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
 			else
 				sample = 0;
 
-			if (! AccuracyHack)
+			if (! gb->AccuracyHack)
 			{
 				gb->snd_3.pos++;
 				if( gb->snd_3.pos >= ((UINT32)(((gb->snd_3.period ) >> 21)) + gb->snd_3.duty) )
@@ -722,7 +719,7 @@ void gameboy_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
 			/* Similar problem to Mode 3, we seem to miss some notes */
 			sample = gb->snd_4.signal & gb->snd_4.env_value;
 			sample -= gb->snd_4.env_value / 2;	// make Bipolar
-			if (! LowNoiseChn)
+			if (! gb->LowNoiseChn)
 				sample <<= 1;	// that's more like VisualBoy Advance (and sounds better)
 			gb->snd_4.pos++;
 			if( gb->snd_4.pos == (gb->snd_4.period >> (FIXED_POINT + 1)) )
@@ -794,16 +791,19 @@ void gameboy_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
 
 
 //static DEVICE_START( gameboy_sound )
-int device_start_gameboy_sound(UINT8 ChipID, int clock)
+int device_start_gameboy_sound(void **_info, int clock, int Flags, int SampleRate)
 {
 	//gb_sound_t *gb = get_token(device);
 	gb_sound_t *gb;
 	int I, J;
 
-	if (ChipID >= MAX_CHIPS)
-		return 0;
+	gb = (gb_sound_t *) calloc(1, sizeof(gb_sound_t));
+	*_info = (void *) gb;
+
+	gb->LoudWaveChn = (Flags & 0x01) >> 0;
+	gb->LowNoiseChn = (Flags & 0x02) >> 1;
+	gb->AccuracyHack = ! ((Flags & 0x04) >> 2);
 	
-	gb = &GBSoundData[ChipID];
 	memset(&gb->snd_1, 0, sizeof(gb->snd_1));
 	memset(&gb->snd_2, 0, sizeof(gb->snd_2));
 	memset(&gb->snd_3, 0, sizeof(gb->snd_3));
@@ -852,18 +852,19 @@ int device_start_gameboy_sound(UINT8 ChipID, int clock)
 	gb->snd_2.Muted = 0x00;
 	gb->snd_3.Muted = 0x00;
 	gb->snd_4.Muted = 0x00;
-	
+
 	return gb->rate;
 }
 
-void device_stop_gameboy_sound(UINT8 ChipID)
+void device_stop_gameboy_sound(void *_info)
 {
+	free(_info);
 	return;
 }
 
-void device_reset_gameboy_sound(UINT8 ChipID)
+void device_reset_gameboy_sound(void *_info)
 {
-	gb_sound_t *gb = &GBSoundData[ChipID];
+	gb_sound_t *gb = (gb_sound_t *)_info;
 
 	// moved there from device_start
 	gb_sound_w_internal( gb, NR52, 0x00 );
@@ -887,9 +888,9 @@ void device_reset_gameboy_sound(UINT8 ChipID)
 	return;
 }
 
-void gameboy_sound_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
+void gameboy_sound_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-	gb_sound_t *gb = &GBSoundData[ChipID];
+	gb_sound_t *gb = (gb_sound_t *)_info;
 	
 	gb->snd_1.Muted = (MuteMask >> 0) & 0x01;
 	gb->snd_2.Muted = (MuteMask >> 1) & 0x01;
@@ -898,16 +899,6 @@ void gameboy_sound_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
 	
 	return;
 }
-
-void gameboy_sound_set_options(UINT8 Flags)
-{
-	LoudWaveChn = (Flags & 0x01) >> 0;
-	LowNoiseChn = (Flags & 0x02) >> 1;
-	AccuracyHack = ! ((Flags & 0x04) >> 2);
-	
-	return;
-}
-
 
 
 /*DEVICE_GET_INFO( gameboy_sound )

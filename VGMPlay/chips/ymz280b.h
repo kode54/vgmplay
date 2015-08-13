@@ -24,14 +24,14 @@ WRITE8_DEVICE_HANDLER( ymz280b_w );
 DEVICE_GET_INFO( ymz280b );
 #define SOUND_YMZ280B DEVICE_GET_INFO_NAME( ymz280b )*/
 
-void ymz280b_update(UINT8 ChipID, stream_sample_t **outputs, int samples);
-int device_start_ymz280b(UINT8 ChipID, int clock);
-void device_stop_ymz280b(UINT8 ChipID);
-void device_reset_ymz280b(UINT8 ChipID);
+void ymz280b_update(void *chip, stream_sample_t **outputs, int samples);
+int device_start_ymz280b(void **chip, int clock);
+void device_stop_ymz280b(void *chip);
+void device_reset_ymz280b(void *chip);
 
-UINT8 ymz280b_r(UINT8 ChipID, offs_t offset);
-void ymz280b_w(UINT8 ChipID, offs_t offset, UINT8 data);
-void ymz280b_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
+UINT8 ymz280b_r(void *chip, offs_t offset);
+void ymz280b_w(void *chip, offs_t offset, UINT8 data);
+void ymz280b_write_rom(void *chip, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
 					   const UINT8* ROMData);
 
-void ymz280b_set_mute_mask(UINT8 ChipID, UINT32 MuteMask);
+void ymz280b_set_mute_mask(void *chip, UINT32 MuteMask);

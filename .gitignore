@@ -24,3 +24,8 @@
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# Unix
+*.o
+libvgmplay.a
+vgm2pcm

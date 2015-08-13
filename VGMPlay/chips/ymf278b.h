@@ -16,15 +16,15 @@ WRITE8_DEVICE_HANDLER( ymf278b_w );
 DEVICE_GET_INFO( ymf278b );
 #define SOUND_YMF278B DEVICE_GET_INFO_NAME( ymf278b )*/
 
-void ymf278b_pcm_update(UINT8 ChipID, stream_sample_t **outputs, int samples);
-int device_start_ymf278b(UINT8 ChipID, int clock);
-void device_stop_ymf278b(UINT8 ChipID);
-void device_reset_ymf278b(UINT8 ChipID);
+void ymf278b_pcm_update(void *chip, stream_sample_t **outputs, int samples);
+int device_start_ymf278b(void **chip, int clock);
+void device_stop_ymf278b(void *chip);
+void device_reset_ymf278b(void *chip);
 
-UINT8 ymf278b_r(UINT8 ChipID, offs_t offset);
-void ymf278b_w(UINT8 ChipID, offs_t offset, UINT8 data);
-void ymf278b_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
+UINT8 ymf278b_r(void *chip, offs_t offset);
+void ymf278b_w(void *chip, offs_t offset, UINT8 data);
+void ymf278b_write_rom(void *chip, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
 					   const UINT8* ROMData);
 
-void ymf278b_set_mute_mask(UINT8 ChipID, UINT32 MuteMaskFM, UINT32 MuteMaskWT);
+void ymf278b_set_mute_mask(void *chip, UINT32 MuteMaskFM, UINT32 MuteMaskWT);
 

@@ -49,7 +49,7 @@ Registers:
 ***************************************************************************/
 
 //#include "emu.h"
-#include <malloc.h>
+#include <stdlib.h>
 #include <memory.h>
 #include <stddef.h>	// for NULL
 #include "mamedef.h"
@@ -105,12 +105,6 @@ struct _x1_010_state
 /* mixer tables and internal buffers */
 //static short  *mixer_buffer = NULL;
 
-extern UINT8 CHIP_SAMPLING_MODE;
-extern INT32 CHIP_SAMPLE_RATE;
-
-#define MAX_CHIPS	0x02
-static x1_010_state X1010Data[MAX_CHIPS];
-
 /*INLINE x1_010_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
@@ -123,10 +117,9 @@ static x1_010_state X1010Data[MAX_CHIPS];
  generate sound to the mix buffer
 --------------------------------------------------------------*/
 //static STREAM_UPDATE( seta_update )
-void seta_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void seta_update(void *param, stream_sample_t **outputs, int samples)
 {
-	//x1_010_state *info = (x1_010_state *)param;
-	x1_010_state *info = &X1010Data[ChipID];
+	x1_010_state *info = (x1_010_state *)param;
 	X1_010_CHANNEL	*reg;
 	int		ch, i, volL, volR, freq, div;
 	register INT8	*start, *end, data;
@@ -215,17 +208,15 @@ void seta_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
 
 
 //static DEVICE_START( x1_010 )
-int device_start_x1_010(UINT8 ChipID, int clock)
+int device_start_x1_010(void **_info, int clock, int CHIP_SAMPLING_MODE, int CHIP_SAMPLE_RATE)
 {
 	int i;
 	//const x1_010_interface *intf = (const x1_010_interface *)device->static_config();
 	//x1_010_state *info = get_safe_token(device);
 	x1_010_state *info;
 
-	if (ChipID >= MAX_CHIPS)
-		return 0;
-	
-	info = &X1010Data[ChipID];
+	info = (x1_010_state *) calloc(1, sizeof(x1_010_state));
+	*_info = (void *) info;
 	
 	//info->region		= *device->region();
 	//info->base_clock	= device->clock();
@@ -251,18 +242,20 @@ int device_start_x1_010(UINT8 ChipID, int clock)
 	return info->rate;
 }
 
-void device_stop_x1_010(UINT8 ChipID)
+void device_stop_x1_010(void *_info)
 {
-	x1_010_state *info = &X1010Data[ChipID];
+	x1_010_state *info = (x1_010_state *)_info;
 	
 	free(info->rom);	info->rom = NULL;
+
+	free(info);
 	
 	return;
 }
 
-void device_reset_x1_010(UINT8 ChipID)
+void device_reset_x1_010(void *_info)
 {
-	x1_010_state *info = &X1010Data[ChipID];
+	x1_010_state *info = (x1_010_state *)_info;
 	
 	memset(info->reg, 0, 0x2000);
 	//memset(info->HI_WORD_BUF, 0, 0x2000);
@@ -285,10 +278,10 @@ void device_reset_x1_010(UINT8 ChipID)
 
 
 //READ8_DEVICE_HANDLER( seta_sound_r )
-UINT8 seta_sound_r(UINT8 ChipID, offs_t offset)
+UINT8 seta_sound_r(void *_info, offs_t offset)
 {
 	//x1_010_state *info = get_safe_token(device);
-	x1_010_state *info = &X1010Data[ChipID];
+	x1_010_state *info = (x1_010_state *)_info;
 	//offset ^= info->address;
 	return info->reg[offset];
 }
@@ -297,10 +290,10 @@ UINT8 seta_sound_r(UINT8 ChipID, offs_t offset)
 
 
 //WRITE8_DEVICE_HANDLER( seta_sound_w )
-void seta_sound_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void seta_sound_w(void *_info, offs_t offset, UINT8 data)
 {
 	//x1_010_state *info = get_safe_token(device);
-	x1_010_state *info = &X1010Data[ChipID];
+	x1_010_state *info = (x1_010_state *)_info;
 	int channel, reg;
 	//offset ^= info->address;
 
@@ -316,10 +309,10 @@ void seta_sound_w(UINT8 ChipID, offs_t offset, UINT8 data)
 	info->reg[offset] = data;
 }
 
-void x1_010_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
+void x1_010_write_rom(void *_info, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
 						const UINT8* ROMData)
 {
-	x1_010_state *info = &X1010Data[ChipID];
+	x1_010_state *info = (x1_010_state *)_info;
 	
 	if (info->ROMSize != ROMSize)
 	{
@@ -338,9 +331,9 @@ void x1_010_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t Dat
 }
 
 
-void x1_010_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
+void x1_010_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-	x1_010_state *info = &X1010Data[ChipID];
+	x1_010_state *info = (x1_010_state *)_info;
 	UINT8 CurChn;
 	
 	for (CurChn = 0; CurChn < SETA_NUM_CHANNELS; CurChn ++)

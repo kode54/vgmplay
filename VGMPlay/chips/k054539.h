@@ -17,16 +17,16 @@ struct _k054539_interface
 };*/
 
 
-void k054539_update(UINT8 ChipID, stream_sample_t **outputs, int samples);
-int device_start_k054539(UINT8 ChipID, int clock);
-void device_stop_k054539(UINT8 ChipID);
-void device_reset_k054539(UINT8 ChipID);
+void k054539_update(void *chip, stream_sample_t **outputs, int samples);
+int device_start_k054539(void **chip, int clock);
+void device_stop_k054539(void *chip);
+void device_reset_k054539(void *chip);
 
 
 //WRITE8_DEVICE_HANDLER( k054539_w );
 //READ8_DEVICE_HANDLER( k054539_r );
-void k054539_w(UINT8 ChipID, offs_t offset, UINT8 data);
-UINT8 k054539_r(UINT8 ChipID, offs_t offset);
+void k054539_w(void *chip, offs_t offset, UINT8 data);
+UINT8 k054539_r(void *chip, offs_t offset);
 
 //* control flags, may be set at DRIVER_INIT().
 #define K054539_RESET_FLAGS     0
@@ -35,7 +35,7 @@ UINT8 k054539_r(UINT8 ChipID, offs_t offset);
 #define K054539_UPDATE_AT_KEYON 4
 
 //void k054539_init_flags(device_t *device, int flags);
-void k054539_init_flags(UINT8 ChipID, int flags);
+void k054539_init_flags(void *chip, int flags);
 
 /*
     Note that the eight PCM channels of a K054539 do not have separate
@@ -50,12 +50,12 @@ void k054539_init_flags(UINT8 ChipID, int flags);
         gain    : 0.0=silent, 1.0=no gain, 2.0=twice as loud, etc.
 */
 //void k054539_set_gain(device_t *device, int channel, double gain);
-void k054539_set_gain(UINT8 ChipID, int channel, double gain);
+void k054539_set_gain(void *chip, int channel, double gain);
 
 
-void k054539_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
+void k054539_write_rom(void *chip, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
 					   const UINT8* ROMData);
-void k054539_set_mute_mask(UINT8 ChipID, UINT32 MuteMask);
+void k054539_set_mute_mask(void *chip, UINT32 MuteMask);
 
 
 //DECLARE_LEGACY_SOUND_DEVICE(K054539, k054539);

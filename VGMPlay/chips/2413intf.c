@@ -26,6 +26,7 @@ struct _ym2413_state
 {
 	//sound_stream *	stream;
 	void *			chip;
+	int			EMU_CORE;
 	UINT8			Mode;
 };
 
@@ -33,13 +34,6 @@ static unsigned char vrc7_inst[(16 + 3) * 8] =
 {
 #include "vrc7tone.h"
 };
-
-extern UINT8 CHIP_SAMPLING_MODE;
-extern INT32 CHIP_SAMPLE_RATE;
-static UINT8 EMU_CORE = 0x00;
-
-#define MAX_CHIPS	0x02
-static ym2413_state YM2413Data[MAX_CHIPS];
 
 /*INLINE ym2413_state *get_safe_token(const device_config *device)
 {
@@ -65,10 +59,10 @@ void YM2413DAC_update(int chip,stream_sample_t **inputs, stream_sample_t **_buff
 #endif
 
 //static STREAM_UPDATE( ym2413_stream_update )
-void ym2413_stream_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void ym2413_stream_update(void *_info, stream_sample_t **outputs, int samples)
 {
-	ym2413_state *info = &YM2413Data[ChipID];
-	switch(EMU_CORE)
+	ym2413_state *info = (ym2413_state*)_info;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -81,12 +75,14 @@ void ym2413_stream_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
 	}
 }
 
+static stream_sample_t* DUMMYBUF[0x02] = {NULL, NULL};
+
 static void _stream_update(void *param, int interval)
 {
 	ym2413_state *info = (ym2413_state *)param;
 	/*stream_update(info->stream);*/
 	
-	switch(EMU_CORE)
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -100,16 +96,23 @@ static void _stream_update(void *param, int interval)
 }
 
 //static DEVICE_START( ym2413 )
-int device_start_ym2413(UINT8 ChipID, int clock)
+int device_start_ym2413(void **_info, int EMU_CORE, int clock, int CHIP_SAMPLING_MODE, int CHIP_SAMPLE_RATE)
 {
 	//ym2413_state *info = get_safe_token(device);
 	ym2413_state *info;
 	int rate;
+
+#ifdef ENABLE_ALL_CORES
+	if (EMU_CORE >= 0x02)
+		EMU_CORE = EC_EMU2413;
+#else
+	EMU_CORE = EC_EMU2413;
+#endif
 	
-	if (ChipID >= MAX_CHIPS)
-		return 0;
-	
-	info = &YM2413Data[ChipID];
+	info = (ym2413_state *) calloc(1, sizeof(ym2413_state));
+	*_info = (void*) info;
+
+	info->EMU_CORE = EMU_CORE;
 	info->Mode = (clock & 0x80000000) >> 31;
 	clock &= 0x7FFFFFFF;
 	
@@ -169,15 +172,16 @@ int device_start_ym2413(UINT8 ChipID, int clock)
 	}
 	return 0;
 #endif*/
+
 	return rate;
 }
 
 //static DEVICE_STOP( ym2413 )
-void device_stop_ym2413(UINT8 ChipID)
+void device_stop_ym2413(void *_info)
 {
 	//ym2413_state *info = get_safe_token(device);
-	ym2413_state *info = &YM2413Data[ChipID];
-	switch(EMU_CORE)
+	ym2413_state *info = (ym2413_state *)_info;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -188,14 +192,16 @@ void device_stop_ym2413(UINT8 ChipID)
 		OPLL_delete(info->chip);
 		break;
 	}
+
+	free(info);
 }
 
 //static DEVICE_RESET( ym2413 )
-void device_reset_ym2413(UINT8 ChipID)
+void device_reset_ym2413(void *_info)
 {
 	//ym2413_state *info = get_safe_token(device);
-	ym2413_state *info = &YM2413Data[ChipID];
-	switch(EMU_CORE)
+	ym2413_state *info = (ym2413_state *)_info;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -215,11 +221,11 @@ void device_reset_ym2413(UINT8 ChipID)
 
 
 //WRITE8_DEVICE_HANDLER( ym2413_w )
-void ym2413_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void ym2413_w(void *_info, offs_t offset, UINT8 data)
 {
 	//ym2413_state *info = get_safe_token(device);
-	ym2413_state *info = &YM2413Data[ChipID];
-	switch(EMU_CORE)
+	ym2413_state *info = (ym2413_state *)_info;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -233,32 +239,21 @@ void ym2413_w(UINT8 ChipID, offs_t offset, UINT8 data)
 }
 
 //WRITE8_DEVICE_HANDLER( ym2413_register_port_w )
-void ym2413_register_port_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void ym2413_register_port_w(void *_info, offs_t offset, UINT8 data)
 {
-	ym2413_w(ChipID, 0, data);
+	ym2413_w(_info, 0, data);
 }
 //WRITE8_DEVICE_HANDLER( ym2413_data_port_w )
-void ym2413_data_port_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void ym2413_data_port_w(void *_info, offs_t offset, UINT8 data)
 {
-	ym2413_w(ChipID, 1, data);
+	ym2413_w(_info, 1, data);
 }
 
 
-void ym2413_set_emu_core(UINT8 Emulator)
+void ym2413_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-#ifdef ENABLE_ALL_CORES
-	EMU_CORE = (Emulator < 0x02) ? Emulator : 0x00;
-#else
-	EMU_CORE = EC_EMU2413;
-#endif
-	
-	return;
-}
-
-void ym2413_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
-{
-	ym2413_state *info = &YM2413Data[ChipID];
-	switch(EMU_CORE)
+	ym2413_state *info = (ym2413_state *)_info;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -273,11 +268,11 @@ void ym2413_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
 	return;
 }
 
-void ym2413_set_panning(UINT8 ChipID, INT16* PanVals)
+void ym2413_set_panning(void *_info, INT16* PanVals)
 {
-	ym2413_state *info = &YM2413Data[ChipID];
+	ym2413_state *info = (ym2413_state *)_info;
 	UINT8 CurChn;
-	switch(EMU_CORE)
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:

@@ -27,7 +27,7 @@ Revisions:
 *********************************************************/
 
 //#include "emu.h"
-#include <malloc.h>
+#include <stdlib.h>
 #include <memory.h>
 #include <stddef.h>	// for NULL
 #include "mamedef.h"
@@ -61,9 +61,6 @@ struct _ga20_state
 };
 
 
-#define MAX_CHIPS	0x02
-static ga20_state GA20Data[MAX_CHIPS];
-
 /*INLINE ga20_state *get_safe_token(device_t *device)
 {
 	assert(device != NULL);
@@ -73,10 +70,9 @@ static ga20_state GA20Data[MAX_CHIPS];
 
 
 //static STREAM_UPDATE( IremGA20_update )
-void IremGA20_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void IremGA20_update(void *param, stream_sample_t **outputs, int samples)
 {
-	//ga20_state *chip = (ga20_state *)param;
-	ga20_state *chip = &GA20Data[ChipID];
+	ga20_state *chip = (ga20_state *)param;
 	UINT32 rate[4], pos[4], frac[4], end[4], vol[4], play[4];
 	UINT8 *pSamples;
 	stream_sample_t *outL, *outR;
@@ -152,10 +148,10 @@ void IremGA20_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
 }
 
 //WRITE8_DEVICE_HANDLER( irem_ga20_w )
-void irem_ga20_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void irem_ga20_w(void *_info, offs_t offset, UINT8 data)
 {
 	//ga20_state *chip = get_safe_token(device);
-	ga20_state *chip = &GA20Data[ChipID];
+	ga20_state *chip = (ga20_state *)_info;
 	int channel;
 
 	//logerror("GA20:  Offset %02x, data %04x\n",offset,data);
@@ -201,10 +197,10 @@ void irem_ga20_w(UINT8 ChipID, offs_t offset, UINT8 data)
 }
 
 //READ8_DEVICE_HANDLER( irem_ga20_r )
-UINT8 irem_ga20_r(UINT8 ChipID, offs_t offset)
+UINT8 irem_ga20_r(void *_info, offs_t offset)
 {
 	//ga20_state *chip = get_safe_token(device);
-	ga20_state *chip = &GA20Data[ChipID];
+	ga20_state *chip = (ga20_state *)_info;
 	int channel;
 
 	//chip->stream->update();
@@ -244,26 +240,24 @@ static void iremga20_reset(ga20_state *chip)
 
 
 //static DEVICE_RESET( iremga20 )
-void device_reset_iremga20(UINT8 ChipID)
+void device_reset_iremga20(void *_info)
 {
 	//iremga20_reset(get_safe_token(device));
-	ga20_state *chip = &GA20Data[ChipID];
+	ga20_state *chip = (ga20_state *)_info;
 	
 	iremga20_reset(chip);
 	memset(chip->regs, 0x00, 0x40 * sizeof(UINT16));
 }
 
 //static DEVICE_START( iremga20 )
-int device_start_iremga20(UINT8 ChipID, int clock)
+int device_start_iremga20(void **_info, int clock)
 {
 	//ga20_state *chip = get_safe_token(device);
 	ga20_state *chip;
 	int i;
 
-	if (ChipID >= MAX_CHIPS)
-		return 0;
-	
-	chip = &GA20Data[ChipID];
+	chip = (ga20_state *) calloc(1, sizeof(ga20_state));
+	*_info = (void *) chip;
 
 	/* Initialize our chip structure */
 	//chip->rom = *device->region();
@@ -297,19 +291,21 @@ int device_start_iremga20(UINT8 ChipID, int clock)
 	return clock / 4;
 }
 
-void device_stop_iremga20(UINT8 ChipID)
+void device_stop_iremga20(void *_info)
 {
-	ga20_state *chip = &GA20Data[ChipID];
+	ga20_state *chip = (ga20_state *)_info;
 	
 	free(chip->rom);	chip->rom = NULL;
+
+	free(chip);
 	
 	return;
 }
 
-void iremga20_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
+void iremga20_write_rom(void *_info, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
 						const UINT8* ROMData)
 {
-	ga20_state *chip = &GA20Data[ChipID];
+	ga20_state *chip = (ga20_state *)_info;
 	
 	if (chip->rom_size != ROMSize)
 	{
@@ -328,9 +324,9 @@ void iremga20_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t D
 }
 
 
-void iremga20_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
+void iremga20_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-	ga20_state *chip = &GA20Data[ChipID];
+	ga20_state *chip = (ga20_state *)_info;
 	UINT8 CurChn;
 	
 	for (CurChn = 0; CurChn < 4; CurChn ++)

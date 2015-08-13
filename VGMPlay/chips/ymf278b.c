@@ -63,7 +63,7 @@
 //#include "sndintrf.h"
 //#include "streams.h"
 //#include "cpuintrf.h"
-#include <malloc.h>
+#include <stdlib.h>
 #include <memory.h>
 #include <stdio.h>
 #include <string.h>
@@ -151,16 +151,6 @@ typedef struct
 	UINT8 FMEnabled;	// that saves a whole lot of CPU
 	//sound_stream * stream;
 } YMF278BChip;
-
-extern UINT8 CHIP_SAMPLING_MODE;
-extern INT32 CHIP_SAMPLE_RATE;
-#define MAX_CHIPS	0x10
-static YMF278BChip YMF278BData[MAX_CHIPS];
-static UINT32 ROMFileSize = 0x00;
-static UINT8* ROMFile = NULL;
-
-char* FindFile(const char* FileName);	// from VGMPlay_Intf.h/VGMPlay.c
-
 
 #define EG_SH	16	// 16.16 fixed point (EG timing)
 #define EG_TIMER_OVERFLOW	(1 << EG_SH)
@@ -622,9 +612,9 @@ int ymf278b_anyActive(YMF278BChip* chip)
 	return 0;
 }
 
-void ymf278b_pcm_update(UINT8 ChipID, stream_sample_t** outputs, int samples)
+void ymf278b_pcm_update(void *_info, stream_sample_t** outputs, int samples)
 {
-	YMF278BChip* chip = &YMF278BData[ChipID];
+	YMF278BChip* chip = (YMF278BChip *)_info;
 	int i;
 	unsigned int j;
 	INT32 vl;
@@ -1049,10 +1039,10 @@ UINT8 ymf278b_readStatus(YMF278BChip* chip)
 }
 
 //WRITE8_DEVICE_HANDLER( ymf278b_w )
-void ymf278b_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void ymf278b_w(void *_info, offs_t offset, UINT8 data)
 {
 	//YMF278BChip *chip = get_safe_token(device);
-	YMF278BChip *chip = &YMF278BData[ChipID];
+	YMF278BChip *chip = (YMF278BChip *)_info;
 
 	switch (offset)
 	{
@@ -1097,43 +1087,9 @@ void ymf278b_clearRam(YMF278BChip* chip)
 
 static void ymf278b_load_rom(YMF278BChip *chip)
 {
-	const char* ROM_FILENAME = "yrw801.rom";
-	char* FileName;
-	FILE* hFile;
-	size_t RetVal;
-	
-	if (! ROMFileSize)
-	{
-		ROMFileSize = 0x00200000;
-		ROMFile = (UINT8*)malloc(ROMFileSize);
-		memset(ROMFile, 0xFF, ROMFileSize);
-		
-		FileName = FindFile(ROM_FILENAME);
-		if (FileName != NULL)
-		{
-			hFile = fopen(FileName, "rb");
-			free(FileName);
-		}
-		else
-		{
-			hFile = NULL;
-		}
-		if (hFile != NULL)
-		{
-			RetVal = fread(ROMFile, 0x01, ROMFileSize, hFile);
-			fclose(hFile);
-			if (RetVal != ROMFileSize)
-				printf("Error while reading OPL4 Sample ROM (%s)!\n", ROM_FILENAME);
-		}
-		else
-		{
-			printf("Warning! OPL4 Sample ROM (%s) not found!\n", ROM_FILENAME);
-		}
-	}
-	
-	chip->ROMSize = ROMFileSize;
+	chip->ROMSize = 0x00200000;
 	chip->rom = (UINT8*)malloc(chip->ROMSize);
-	memcpy(chip->rom, ROMFile, chip->ROMSize);
+	memset(chip->rom, 0xFF, chip->ROMSize);
 	
 	return;
 }
@@ -1164,7 +1120,7 @@ static int ymf278b_init(YMF278BChip *chip, int clock, void (*cb)(int))
 }
 
 //static DEVICE_START( ymf278b )
-int device_start_ymf278b(UINT8 ChipID, int clock)
+int device_start_ymf278b(void **_info, int clock)
 {
 	static const ymf278b_interface defintrf = { 0 };
 	const ymf278b_interface *intf;
@@ -1172,10 +1128,8 @@ int device_start_ymf278b(UINT8 ChipID, int clock)
 	YMF278BChip *chip;
 	int rate;
 
-	if (ChipID >= MAX_CHIPS)
-		return 0;
-	
-	chip = &YMF278BData[ChipID];
+	chip = (YMF278BChip *) calloc(1, sizeof(YMF278BChip));
+	*_info = (void *) chip;
 	
 	//chip->device = device;
 	//intf = (device->static_config != NULL) ? (const ymf278b_interface *)device->static_config : &defintrf;
@@ -1198,19 +1152,21 @@ int device_start_ymf278b(UINT8 ChipID, int clock)
 }
 
 //static DEVICE_STOP( ymf278 )
-void device_stop_ymf278b(UINT8 ChipID)
+void device_stop_ymf278b(void *_info)
 {
-	YMF278BChip* chip = &YMF278BData[ChipID];
+	YMF278BChip* chip = (YMF278BChip *)_info;
 	
 	ymf262_shutdown(chip->fmchip);
 	free(chip->rom);	chip->rom = NULL;
-	
+
+	free(chip);	
+
 	return;
 }
 
-void device_reset_ymf278b(UINT8 ChipID)
+void device_reset_ymf278b(void *_info)
 {
-	YMF278BChip* chip = &YMF278BData[ChipID];
+	YMF278BChip* chip = (YMF278BChip *)_info;
 	int i;
 	
 	ymf262_reset_chip(chip->fmchip);
@@ -1229,10 +1185,10 @@ void device_reset_ymf278b(UINT8 ChipID)
 	//loadTime = time;
 }
 
-void ymf278b_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
+void ymf278b_write_rom(void *_info, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
 					  const UINT8* ROMData)
 {
-	YMF278BChip *chip = &YMF278BData[ChipID];
+	YMF278BChip *chip = (YMF278BChip *)_info;
 	
 	if (chip->ROMSize != ROMSize)
 	{
@@ -1251,9 +1207,9 @@ void ymf278b_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t Da
 }
 
 
-void ymf278b_set_mute_mask(UINT8 ChipID, UINT32 MuteMaskFM, UINT32 MuteMaskWT)
+void ymf278b_set_mute_mask(void *_info, UINT32 MuteMaskFM, UINT32 MuteMaskWT)
 {
-	YMF278BChip *chip = &YMF278BData[ChipID];
+	YMF278BChip *chip = (YMF278BChip *)_info;
 	UINT8 CurChn;
 	
 	ymf262_set_mutemask(chip->fmchip, MuteMaskFM);

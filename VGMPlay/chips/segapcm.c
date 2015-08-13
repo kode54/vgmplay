@@ -4,7 +4,7 @@
 
 #include "mamedef.h"
 #include <memory.h>
-#include <malloc.h>
+#include <stdlib.h>
 #include <stdio.h>
 //#include "sndintrf.h"
 //#include "streams.h"
@@ -29,14 +29,11 @@ struct _segapcm_state
 	//sound_stream * stream;
 };
 
-#define MAX_CHIPS	0x02
-static segapcm_state SPCMData[MAX_CHIPS];
-
 #ifndef _DEBUG
 //UINT8 SegaPCM_NewCore = 0x00;
 #else
 //UINT8 SegaPCM_NewCore = 0x01;
-static void sega_pcm_fwrite_romusage(UINT8 ChipID);
+static void sega_pcm_fwrite_romusage(void *_info);
 #endif
 
 /*INLINE segapcm_state *get_safe_token(const device_config *device)
@@ -49,10 +46,10 @@ static void sega_pcm_fwrite_romusage(UINT8 ChipID);
 }*/
 
 //static STREAM_UPDATE( SEGAPCM_update )
-void SEGAPCM_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void SEGAPCM_update(void *info, stream_sample_t **outputs, int samples)
 {
 	//segapcm_state *spcm = (segapcm_state *)param;
-	segapcm_state *spcm = &SPCMData[ChipID];
+	segapcm_state *spcm = (segapcm_state *)info;
 	int rgnmask = spcm->rgnmask;
 	int ch;
 
@@ -203,7 +200,7 @@ void SEGAPCM_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
 }
 
 //static DEVICE_START( segapcm )
-int device_start_segapcm(UINT8 ChipID, int clock, int intf_bank)
+int device_start_segapcm(void **_info, int clock, int intf_bank)
 {
 	const UINT32 STD_ROM_SIZE = 0x80000;
 	//const sega_pcm_interface *intf = (const sega_pcm_interface *)device->static_config;
@@ -212,10 +209,9 @@ int device_start_segapcm(UINT8 ChipID, int clock, int intf_bank)
 	//segapcm_state *spcm = get_safe_token(device);
 	segapcm_state *spcm;
 
-	if (ChipID >= MAX_CHIPS)
-		return 0;
+	spcm = (segapcm_state *) calloc(1, sizeof(segapcm_state));
+	*_info = (void *) spcm;
 	
-	spcm = &SPCMData[ChipID];
 	intf = &spcm->intf;
 	intf->bank = intf_bank;
 	
@@ -260,30 +256,32 @@ int device_start_segapcm(UINT8 ChipID, int clock, int intf_bank)
 	
 	for (mask = 0; mask < 16; mask ++)
 		spcm->Muted[mask] = 0x00;
-	
+
 	return clock / 128;
 }
 
 //static DEVICE_STOP( segapcm )
-void device_stop_segapcm(UINT8 ChipID)
+void device_stop_segapcm(void *_info)
 {
 	//segapcm_state *spcm = get_safe_token(device);
-	segapcm_state *spcm = &SPCMData[ChipID];
+	segapcm_state *spcm = (segapcm_state *)_info;
 	free(spcm->rom);	spcm->rom = NULL;
 #ifdef _DEBUG
 	//sega_pcm_fwrite_romusage(ChipID);
 	free(spcm->romusage);
 #endif
 	free(spcm->ram);
+
+	free(spcm);
 	
 	return;
 }
 
 //static DEVICE_RESET( segapcm )
-void device_reset_segapcm(UINT8 ChipID)
+void device_reset_segapcm(void *_info)
 {
 	//segapcm_state *spcm = get_safe_token(device);
-	segapcm_state *spcm = &SPCMData[ChipID];
+	segapcm_state *spcm = (segapcm_state *)_info;
 	
 	memset(spcm->ram, 0xFF, 0x800);
 	
@@ -292,28 +290,28 @@ void device_reset_segapcm(UINT8 ChipID)
 
 
 //WRITE8_DEVICE_HANDLER( sega_pcm_w )
-void sega_pcm_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void sega_pcm_w(void *_info, offs_t offset, UINT8 data)
 {
 	//segapcm_state *spcm = get_safe_token(device);
-	segapcm_state *spcm = &SPCMData[ChipID];
+	segapcm_state *spcm = (segapcm_state *)_info;
 	//stream_update(spcm->stream);
 
 	spcm->ram[offset & 0x07ff] = data;
 }
 
 //READ8_DEVICE_HANDLER( sega_pcm_r )
-UINT8 sega_pcm_r(UINT8 ChipID, offs_t offset)
+UINT8 sega_pcm_r(void *_info, offs_t offset)
 {
 	//segapcm_state *spcm = get_safe_token(device);
-	segapcm_state *spcm = &SPCMData[ChipID];
+	segapcm_state *spcm = (segapcm_state *)_info;
 	//stream_update(spcm->stream);
 	return spcm->ram[offset & 0x07ff];
 }
 
-void sega_pcm_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
+void sega_pcm_write_rom(void *_info, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
 						const UINT8* ROMData)
 {
-	segapcm_state *spcm = &SPCMData[ChipID];
+	segapcm_state *spcm = (segapcm_state *)_info;
 	
 	if (spcm->ROMSize != ROMSize)
 	{
@@ -356,9 +354,9 @@ void sega_pcm_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t D
 
 
 #ifdef _DEBUG
-static void sega_pcm_fwrite_romusage(UINT8 ChipID)
+static void sega_pcm_fwrite_romusage(void *_info)
 {
-	segapcm_state *spcm = &SPCMData[ChipID];
+	segapcm_state *spcm = (segapcm_state *)_info;
 	
 	FILE* hFile;
 	
@@ -373,9 +371,9 @@ static void sega_pcm_fwrite_romusage(UINT8 ChipID)
 }
 #endif
 
-void segapcm_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
+void segapcm_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-	segapcm_state *spcm = &SPCMData[ChipID];
+	segapcm_state *spcm = (segapcm_state *)_info;
 	unsigned char CurChn;
 	
 	for (CurChn = 0; CurChn < 16; CurChn ++)

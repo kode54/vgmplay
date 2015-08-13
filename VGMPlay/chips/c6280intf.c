@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include "mamedef.h"
 #ifdef ENABLE_ALL_CORES
 #include "c6280.h"
@@ -14,20 +15,13 @@
 typedef struct _c6280_state
 {
 	void* chip;
+	int EMU_CORE;
 } c6280_state;
 
-extern UINT32 SampleRate;
-extern UINT8 CHIP_SAMPLING_MODE;
-extern INT32 CHIP_SAMPLE_RATE;
-static UINT8 EMU_CORE = 0x00;
-
-#define MAX_CHIPS	0x02
-static c6280_state C6280Data[MAX_CHIPS];
-
-void c6280_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void c6280_update(void *_info, stream_sample_t **outputs, int samples)
 {
-	c6280_state* info = &C6280Data[ChipID];
-	switch(EMU_CORE)
+	c6280_state* info = (c6280_state *)_info;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -40,15 +34,22 @@ void c6280_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
 	}
 }
 
-int device_start_c6280(UINT8 ChipID, int clock)
+int device_start_c6280(void **_info, int EMU_CORE, int clock, int SampleRate, int CHIP_SAMPLING_MODE, int CHIP_SAMPLE_RATE)
 {
 	c6280_state* info;
 	int rate;
+
+#ifdef ENABLE_ALL_CORES
+	if (EMU_CORE >= 0x02)
+		EMU_CORE = EC_OOTAKE;
+#else
+	EMU_CORE = EC_OOTAKE;
+#endif
 	
-	if (ChipID >= MAX_CHIPS)
-		return 0;
-	
-	info = &C6280Data[ChipID];
+	info = (c6280_state *) calloc(1, sizeof(c6280_state));
+	*_info = (void *) info;
+ 
+	info->EMU_CORE = EMU_CORE;
 	switch(EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
@@ -70,14 +71,14 @@ int device_start_c6280(UINT8 ChipID, int clock)
 			return 0;
 		break;
 	}
- 
+
 	return rate;
 }
 
-void device_stop_c6280(UINT8 ChipID)
+void device_stop_c6280(void *_info)
 {
-	c6280_state* info = &C6280Data[ChipID];
-	switch(EMU_CORE)
+	c6280_state* info = (c6280_state *)_info;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -89,14 +90,16 @@ void device_stop_c6280(UINT8 ChipID)
 		break;
 	}
 	info->chip = NULL;
-	
+
+	free(info);	
+
 	return;
 }
 
-void device_reset_c6280(UINT8 ChipID)
+void device_reset_c6280(void *_info)
 {
-	c6280_state* info = &C6280Data[ChipID];
-	switch(EMU_CORE)
+	c6280_state* info = (c6280_state *)_info;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -110,10 +113,10 @@ void device_reset_c6280(UINT8 ChipID)
 	return;
 }
 
-UINT8 c6280_r(UINT8 ChipID, offs_t offset)
+UINT8 c6280_r(void *_info, offs_t offset)
 {
-	c6280_state* info = &C6280Data[ChipID];
-	switch(EMU_CORE)
+	c6280_state* info = (c6280_state *)_info;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -126,10 +129,10 @@ UINT8 c6280_r(UINT8 ChipID, offs_t offset)
 	}
 }
 
-void c6280_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void c6280_w(void *_info, offs_t offset, UINT8 data)
 {
-	c6280_state* info = &C6280Data[ChipID];
-	switch(EMU_CORE)
+	c6280_state* info = (c6280_state *)_info;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -145,21 +148,10 @@ void c6280_w(UINT8 ChipID, offs_t offset, UINT8 data)
 }
 
 
-void c6280_set_emu_core(UINT8 Emulator)
+void c6280_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-#ifdef ENABLE_ALL_CORES
-	EMU_CORE = (Emulator < 0x02) ? Emulator : 0x00;
-#else
-	EMU_CORE = EC_OOTAKE;
-#endif
-	
-	return;
-}
-
-void c6280_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
-{
-	c6280_state* info = &C6280Data[ChipID];
-	switch(EMU_CORE)
+	c6280_state* info = (c6280_state *)_info;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:

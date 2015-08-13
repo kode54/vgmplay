@@ -5,7 +5,7 @@
 ****************************************************************/
 
 #include <memory.h>	// for memset
-#include <malloc.h>	// for free
+#include <stdlib.h>	// for free
 #include <stddef.h>	// for NULL
 #include "mamedef.h"
 //#include "sndintrf.h"
@@ -26,20 +26,13 @@ typedef struct _ayxx_state ayxx_state;
 struct _ayxx_state
 {
 	void *chip;
+	int EMU_CORE;
 };
 
-extern UINT8 CHIP_SAMPLING_MODE;
-extern INT32 CHIP_SAMPLE_RATE;
-static UINT8 EMU_CORE = 0x00;
-
-extern UINT32 SampleRate;
-#define MAX_CHIPS	0x02
-static ayxx_state AYxxData[MAX_CHIPS];
-
-void ayxx_stream_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void ayxx_stream_update(void *_info, stream_sample_t **outputs, int samples)
 {
-	ayxx_state *info = &AYxxData[ChipID];
-	switch(EMU_CORE)
+	ayxx_state *info = (ayxx_state *)_info;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -52,15 +45,22 @@ void ayxx_stream_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
 	}
 }
 
-int device_start_ayxx(UINT8 ChipID, int clock, UINT8 chip_type, UINT8 Flags)
+int device_start_ayxx(void **_info, int EMU_CORE, int clock, UINT8 chip_type, UINT8 Flags, int CHIP_SAMPLING_MODE, int CHIP_SAMPLE_RATE)
 {
 	ayxx_state *info;
 	int rate;
+
+#ifdef ENABLE_ALL_CORES
+	if (EMU_CORE >= 0x02)
+		EMU_CORE = EC_EMU2149;
+#else
+	EMU_CORE = EC_EMU2149;
+#endif
 	
-	if (ChipID >= MAX_CHIPS)
-		return 0;
-	
-	info = &AYxxData[ChipID];
+	info = (ayxx_state *) calloc(1, sizeof(ayxx_state));
+	*_info = (void *) info;
+ 
+	info->EMU_CORE = EMU_CORE;
 	if (Flags & YM2149_PIN26_LOW)
 		rate = clock / 16;
 	else
@@ -86,14 +86,14 @@ int device_start_ayxx(UINT8 ChipID, int clock, UINT8 chip_type, UINT8 Flags)
 		PSG_setFlags((PSG*)info->chip, Flags & ~YM2149_PIN26_LOW);
 		break;
 	}
- 
+
 	return rate;
 }
 
-void device_stop_ayxx(UINT8 ChipID)
+void device_stop_ayxx(void *_info)
 {
-	ayxx_state *info = &AYxxData[ChipID];
-	switch(EMU_CORE)
+	ayxx_state *info = (ayxx_state *)_info;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -105,12 +105,13 @@ void device_stop_ayxx(UINT8 ChipID)
 		break;
 	}
 	info->chip = NULL;
+	free(info);
 }
 
-void device_reset_ayxx(UINT8 ChipID)
+void device_reset_ayxx(void *_info)
 {
-	ayxx_state *info = &AYxxData[ChipID];
-	switch(EMU_CORE)
+	ayxx_state *info = (ayxx_state *)_info;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -124,10 +125,10 @@ void device_reset_ayxx(UINT8 ChipID)
 }
 
 
-void ayxx_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void ayxx_w(void *_info, offs_t offset, UINT8 data)
 {
-	ayxx_state *info = &AYxxData[ChipID];
-	switch(EMU_CORE)
+	ayxx_state *info = (ayxx_state *)_info;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:
@@ -140,21 +141,10 @@ void ayxx_w(UINT8 ChipID, offs_t offset, UINT8 data)
 	}
 }
 
-void ayxx_set_emu_core(UINT8 Emulator)
+void ayxx_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-#ifdef ENABLE_ALL_CORES
-	EMU_CORE = (Emulator < 0x02) ? Emulator : 0x00;
-#else
-	EMU_CORE = EC_EMU2149;
-#endif
-	
-	return;
-}
-
-void ayxx_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
-{
-	ayxx_state *info = &AYxxData[ChipID];
-	switch(EMU_CORE)
+	ayxx_state *info = (ayxx_state *)_info;
+	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
 	case EC_MAME:

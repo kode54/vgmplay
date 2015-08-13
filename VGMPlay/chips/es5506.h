@@ -42,21 +42,21 @@ struct _es5506_interface
 
 //READ8_DEVICE_HANDLER( es5506_r );
 //WRITE8_DEVICE_HANDLER( es5506_w );
-UINT8 es550x_r(UINT8 ChipID, offs_t offset);
-void es550x_w(UINT8 ChipID, offs_t offset, UINT8 data);
-void es550x_w16(UINT8 ChipID, offs_t offset, UINT16 data);
+UINT8 es550x_r(void *chip, offs_t offset);
+void es550x_w(void *chip, offs_t offset, UINT8 data);
+void es550x_w16(void *chip, offs_t offset, UINT16 data);
 
-void es5506_update(UINT8 ChipID, stream_sample_t **outputs, int samples);
-int device_start_es5506(UINT8 ChipID, int clock, int channels);
-void device_stop_es5506(UINT8 ChipID);
-void device_reset_es5506(UINT8 ChipID);
+void es5506_update(void *chip, stream_sample_t **outputs, int samples);
+int device_start_es5506(void **chip, int clock, int channels);
+void device_stop_es5506(void *chip);
+void device_reset_es5506(void *chip);
 //void es5506_set_base(running_device *device, UINT8 *wavemem);
 
-void es5506_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
+void es5506_write_rom(void *chip, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
 					   const UINT8* ROMData);
 
-void es5506_set_mute_mask(UINT8 ChipID, UINT32 MuteMask);
-void es5506_set_srchg_cb(UINT8 ChipID, SRATE_CALLBACK CallbackFunc, void* DataPtr);
+void es5506_set_mute_mask(void *chip, UINT32 MuteMask);
+void es5506_set_srchg_cb(void *chip, SRATE_CALLBACK CallbackFunc, void* DataPtr);
 
 //void es5506_voice_bank_w(device_t *device, int voice, int bank);
 

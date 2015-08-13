@@ -17,6 +17,7 @@
 *
 ******************************************************************************/
 #include "mamedef.h"
+#include <stdlib.h>
 //#include "attotime.h"
 //#include "sndintrf.h"
 //#include "streams.h"
@@ -36,11 +37,6 @@ struct _ym3526_state
 	//const device_config *device;
 };
 
-
-extern UINT8 CHIP_SAMPLING_MODE;
-extern INT32 CHIP_SAMPLE_RATE;
-#define MAX_CHIPS	0x02
-static ym3526_state YM3526Data[MAX_CHIPS];
 
 /*INLINE ym3526_state *get_safe_token(const device_config *device)
 {
@@ -88,12 +84,13 @@ static void TimerHandler(void *param,int c,int period)
 
 
 //static STREAM_UPDATE( ym3526_stream_update )
-void ym3526_stream_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void ym3526_stream_update(void *param, stream_sample_t **outputs, int samples)
 {
-	//ym3526_state *info = (ym3526_state *)param;
-	ym3526_state *info = &YM3526Data[ChipID];
+	ym3526_state *info = (ym3526_state *)param;
 	ym3526_update_one(info->chip, outputs, samples);
 }
+
+static stream_sample_t* DUMMYBUF[0x02] = {NULL, NULL};
 
 static void _stream_update(void *param/*, int interval*/)
 {
@@ -105,17 +102,16 @@ static void _stream_update(void *param/*, int interval*/)
 
 
 //static DEVICE_START( ym3526 )
-int device_start_ym3526(UINT8 ChipID, int clock)
+int device_start_ym3526(void **_info, int clock, int CHIP_SAMPLING_MODE, int CHIP_SAMPLE_RATE)
 {
 	//static const ym3526_interface dummy = { 0 };
 	//ym3526_state *info = get_safe_token(device);
 	ym3526_state *info;
 	int rate;
 	
-	if (ChipID >= MAX_CHIPS)
-		return 0;
-	
-	info = &YM3526Data[ChipID];
+	info = (ym3526_state *) calloc(1, sizeof(ym3526_state));
+	*_info = (void *) info;	
+
 	rate = clock/72;
 	if ((CHIP_SAMPLING_MODE == 0x01 && rate < CHIP_SAMPLE_RATE) ||
 		CHIP_SAMPLING_MODE == 0x02)
@@ -136,68 +132,69 @@ int device_start_ym3526(UINT8 ChipID, int clock)
 
 	//info->timer[0] = timer_alloc(device->machine, timer_callback_0, info);
 	//info->timer[1] = timer_alloc(device->machine, timer_callback_1, info);
-	
+
 	return rate;
 }
 
 //static DEVICE_STOP( ym3526 )
-void device_stop_ym3526(UINT8 ChipID)
+void device_stop_ym3526(void *_info)
 {
 	//ym3526_state *info = get_safe_token(device);
-	ym3526_state *info = &YM3526Data[ChipID];
+	ym3526_state *info = (ym3526_state *)_info;
 	ym3526_shutdown(info->chip);
+	free(info);
 }
 
 //static DEVICE_RESET( ym3526 )
-void device_reset_ym3526(UINT8 ChipID)
+void device_reset_ym3526(void *_info)
 {
 	//ym3526_state *info = get_safe_token(device);
-	ym3526_state *info = &YM3526Data[ChipID];
+	ym3526_state *info = (ym3526_state *)_info;
 	ym3526_reset_chip(info->chip);
 }
 
 
 //READ8_DEVICE_HANDLER( ym3526_r )
-UINT8 ym3526_r(UINT8 ChipID, offs_t offset)
+UINT8 ym3526_r(void *_info, offs_t offset)
 {
 	//ym3526_state *info = get_safe_token(device);
-	ym3526_state *info = &YM3526Data[ChipID];
+	ym3526_state *info = (ym3526_state *)_info;
 	return ym3526_read(info->chip, offset & 1);
 }
 
 //WRITE8_DEVICE_HANDLER( ym3526_w )
-void ym3526_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void ym3526_w(void *_info, offs_t offset, UINT8 data)
 {
 	//ym3526_state *info = get_safe_token(device);
-	ym3526_state *info = &YM3526Data[ChipID];
+	ym3526_state *info = (ym3526_state *)_info;
 	ym3526_write(info->chip, offset & 1, data);
 }
 
 //READ8_DEVICE_HANDLER( ym3526_status_port_r )
-UINT8 ym3526_status_port_r(UINT8 ChipID, offs_t offset)
+UINT8 ym3526_status_port_r(void *info, offs_t offset)
 {
-	return ym3526_r(ChipID, 0);
+	return ym3526_r(info, 0);
 }
 //READ8_DEVICE_HANDLER( ym3526_read_port_r )
-UINT8 ym3526_read_port_r(UINT8 ChipID, offs_t offset)
+UINT8 ym3526_read_port_r(void *info, offs_t offset)
 {
-	return ym3526_r(ChipID, 1);
+	return ym3526_r(info, 1);
 }
 //WRITE8_DEVICE_HANDLER( ym3526_control_port_w )
-void ym3526_control_port_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void ym3526_control_port_w(void *info, offs_t offset, UINT8 data)
 {
-	ym3526_w(ChipID, 0, data);
+	ym3526_w(info, 0, data);
 }
 //WRITE8_DEVICE_HANDLER( ym3526_write_port_w )
-void ym3526_write_port_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void ym3526_write_port_w(void *info, offs_t offset, UINT8 data)
 {
-	ym3526_w(ChipID, 1, data);
+	ym3526_w(info, 1, data);
 }
 
 
-void ym3526_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
+void ym3526_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-	ym3526_state *info = &YM3526Data[ChipID];
+	ym3526_state *info = (ym3526_state *)_info;
 	opl_set_mute_mask(info->chip, MuteMask);
 }
 

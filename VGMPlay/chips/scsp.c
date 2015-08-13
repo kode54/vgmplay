@@ -243,6 +243,10 @@ struct _scsp_state
 	//devcb_resolved_write_line main_irq;
 
 	//device_t *device;
+
+	signed short *RBUFDST;
+
+	UINT8 BypassDSP;
 };
 
 //static void SCSP_exec_dma(address_space *space, scsp_state *scsp);		/*state DMA transfer function*/
@@ -256,13 +260,6 @@ static const float SDLT[8]={-1000000.0f,-36.0f,-30.0f,-24.0f,-18.0f,-12.0f,-6.0f
 
 //static int length;
 
-
-static signed short *RBUFDST;	//this points to where the sample will be stored in the RingBuf
-
-
-#define MAX_CHIPS	0x02
-static scsp_state SCSPData[MAX_CHIPS];
-static UINT8 BypassDSP = 0x01;
 
 /*INLINE scsp_state *get_safe_token(device_t *device)
 {
@@ -1265,12 +1262,12 @@ INLINE INT32 SCSP_UpdateSlot(scsp_state *scsp, struct _SLOT *slot)
 		if(!SDIR(slot))
 		{
 			unsigned short Enc=((TL(slot))<<0x0)|(0x7<<0xd);
-			*RBUFDST=(sample*scsp->LPANTABLE[Enc])>>(SHIFT+1);
+			*scsp->RBUFDST=(sample*scsp->LPANTABLE[Enc])>>(SHIFT+1);
 		}
 		else
 		{
 			unsigned short Enc=(0<<0x0)|(0x7<<0xd);
-			*RBUFDST=(sample*scsp->LPANTABLE[Enc])>>(SHIFT+1);
+			*scsp->RBUFDST=(sample*scsp->LPANTABLE[Enc])>>(SHIFT+1);
 		}
 	}
 
@@ -1296,9 +1293,9 @@ INLINE void SCSP_DoMasterSamples(scsp_state *scsp, stream_sample_t **outputs, in
 		for(sl=0;sl<32;++sl)
 		{
 #if FM_DELAY
-			RBUFDST=scsp->DELAYBUF+scsp->DELAYPTR;
+			scsp->RBUFDST=scsp->DELAYBUF+scsp->DELAYPTR;
 #else
-			RBUFDST=scsp->RINGBUF+scsp->BUFPTR;
+			scsp->RBUFDST=scsp->RINGBUF+scsp->BUFPTR;
 #endif
 			if(scsp->Slots[sl].active && ! scsp->Slots[sl].Muted)
 			{
@@ -1308,7 +1305,7 @@ INLINE void SCSP_DoMasterSamples(scsp_state *scsp, stream_sample_t **outputs, in
 
 				sample=SCSP_UpdateSlot(scsp, slot);
 
-				if (! BypassDSP)
+				if (! scsp->BypassDSP)
 				{
 					Enc=((TL(slot))<<0x0)|((IMXL(slot))<<0xd);
 					SCSPDSP_SetSample(&scsp->DSP,(sample*scsp->LPANTABLE[Enc])>>(SHIFT-2),ISEL(slot),IMXL(slot));
@@ -1331,7 +1328,7 @@ INLINE void SCSP_DoMasterSamples(scsp_state *scsp, stream_sample_t **outputs, in
 #endif
 		}
 
-		if (! BypassDSP)
+		if (! scsp->BypassDSP)
 		{
 			SCSPDSP_Step(&scsp->DSP);
 
@@ -1450,10 +1447,10 @@ int SCSP_IRQCB(void *param)
 #endif
 
 //static STREAM_UPDATE( SCSP_Update )
-void SCSP_Update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void SCSP_Update(void *_info, stream_sample_t **outputs, int samples)
 {
 	//scsp_state *scsp = (scsp_state *)param;
-	scsp_state *scsp = &SCSPData[ChipID];
+	scsp_state *scsp = (scsp_state *)_info;
 	//bufferl = outputs[0];
 	//bufferr = outputs[1];
 	//length = samples;
@@ -1461,7 +1458,7 @@ void SCSP_Update(UINT8 ChipID, stream_sample_t **outputs, int samples)
 }
 
 //static DEVICE_START( scsp )
-int device_start_scsp(UINT8 ChipID, int clock)
+int device_start_scsp(void **_info, int clock, int Flags)
 {
 	/*const scsp_interface *intf;
 
@@ -1470,10 +1467,10 @@ int device_start_scsp(UINT8 ChipID, int clock)
 	intf = (const scsp_interface *)device->static_config();*/
 	scsp_state *scsp;
 
-	if (ChipID >= MAX_CHIPS)
-		return 0;
-	
-	scsp = &SCSPData[ChipID];
+	scsp = (scsp_state *) calloc(1, sizeof(scsp_state));
+	*_info = (void *) scsp;
+
+	scsp->BypassDSP = (Flags & 0x01) >> 0;
 
 	if (clock < 1000000)	// if < 1 MHz, then it's the sample rate, not the clock
 		clock *= 512;	// (for backwards compatibility with old VGM logs)
@@ -1490,21 +1487,24 @@ int device_start_scsp(UINT8 ChipID, int clock)
 	}
 
 	scsp->main_irq.resolve(intf->main_irq, *device);*/
+
 	return scsp->rate;	// 44100
 }
 
-void device_stop_scsp(UINT8 ChipID)
+void device_stop_scsp(void *_info)
 {
-	scsp_state *scsp = &SCSPData[ChipID];
+	scsp_state *scsp = (scsp_state *)_info;
 	
 	free(scsp->SCSPRAM);	scsp->SCSPRAM = NULL;
-	
+
+	free(scsp);	
+
 	return;
 }
 
-void device_reset_scsp(UINT8 ChipID)
+void device_reset_scsp(void *_info)
 {
-	scsp_state *scsp = &SCSPData[ChipID];
+	scsp_state *scsp = (scsp_state *)_info;
 	int i;
 	
 	// make sure all the slots are off
@@ -1538,10 +1538,10 @@ void device_reset_scsp(UINT8 ChipID)
 
 
 //READ16_DEVICE_HANDLER( scsp_r )
-UINT16 scsp_r(UINT8 ChipID, offs_t offset)
+UINT16 scsp_r(void *_info, offs_t offset)
 {
 	//scsp_state *scsp = get_safe_token(device);
-	scsp_state *scsp = &SCSPData[ChipID];
+	scsp_state *scsp = (scsp_state *)_info;
 
 	//scsp->stream->update();
 
@@ -1549,10 +1549,10 @@ UINT16 scsp_r(UINT8 ChipID, offs_t offset)
 }
 
 //WRITE16_DEVICE_HANDLER( scsp_w )
-void scsp_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void scsp_w(void *_info, offs_t offset, UINT8 data)
 {
 	//scsp_state *scsp = get_safe_token(device);
-	scsp_state *scsp = &SCSPData[ChipID];
+	scsp_state *scsp = (scsp_state *)_info;
 	UINT16 tmp;
 
 	//scsp->stream->update();
@@ -1612,9 +1612,9 @@ READ16_DEVICE_HANDLER( scsp_midi_out_r )
 	return;
 }*/
 
-void scsp_write_ram(UINT8 ChipID, offs_t DataStart, offs_t DataLength, const UINT8* RAMData)
+void scsp_write_ram(void *_info, offs_t DataStart, offs_t DataLength, const UINT8* RAMData)
 {
-	scsp_state *scsp = &SCSPData[ChipID];
+	scsp_state *scsp = (scsp_state *)_info;
 	
 	if (DataStart >= scsp->SCSPRAM_LENGTH)
 		return;
@@ -1627,9 +1627,9 @@ void scsp_write_ram(UINT8 ChipID, offs_t DataStart, offs_t DataLength, const UIN
 }
 
 
-void scsp_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
+void scsp_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-	scsp_state *scsp = &SCSPData[ChipID];
+	scsp_state *scsp = (scsp_state *)_info;
 	UINT8 CurChn;
 	
 	for (CurChn = 0; CurChn < 32; CurChn ++)
@@ -1638,16 +1638,9 @@ void scsp_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
 	return;
 }
 
-void scsp_set_options(UINT8 Flags)
+/*UINT8 scsp_get_channels(void *_info, UINT32* ChannelMask)
 {
-	BypassDSP = (Flags & 0x01) >> 0;
-	
-	return;
-}
-
-UINT8 scsp_get_channels(UINT32* ChannelMask)
-{
-	scsp_state *scsp = &SCSPData[0];
+	scsp_state *scsp = (scsp_state *)_info;
 	UINT8 CurChn;
 	UINT8 UsedChns;
 	UINT32 ChnMask;
@@ -1666,7 +1659,7 @@ UINT8 scsp_get_channels(UINT32* ChannelMask)
 		*ChannelMask = ChnMask;
 	
 	return UsedChns;
-}
+}*/
 
 
 

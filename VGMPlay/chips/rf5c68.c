@@ -4,7 +4,7 @@
 
 #include "mamedef.h"
 #include <memory.h>
-#include <malloc.h>
+#include <stdlib.h>
 //#include "sndintrf.h"
 //#include "streams.h"
 #include "rf5c68.h"
@@ -59,9 +59,6 @@ struct _rf5c68_state
 
 static void rf5c68_mem_stream_flush(rf5c68_state *chip);
 
-#define MAX_CHIPS	0x02
-static rf5c68_state RF5C68Data[MAX_CHIPS];
-
 /*INLINE rf5c68_state *get_safe_token(const device_config *device)
 {
 	assert(device != NULL);
@@ -113,10 +110,10 @@ static void memstream_sample_check(rf5c68_state *chip, UINT32 addr, UINT16 Speed
 }
 
 //static STREAM_UPDATE( rf5c68_update )
-void rf5c68_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void rf5c68_update(void *_info, stream_sample_t **outputs, int samples)
 {
 	//rf5c68_state *chip = (rf5c68_state *)param;
-	rf5c68_state *chip = &RF5C68Data[ChipID];
+	rf5c68_state *chip = (rf5c68_state *)_info;
 	mem_stream* ms = &chip->memstrm;
 	stream_sample_t *left = outputs[0];
 	stream_sample_t *right = outputs[1];
@@ -223,7 +220,7 @@ void rf5c68_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
 /************************************************/
 
 //static DEVICE_START( rf5c68 )
-int device_start_rf5c68(UINT8 ChipID, int clock)
+int device_start_rf5c68(void **_info, int clock)
 {
 	//const rf5c68_interface* intf = (const rf5c68_interface*)device->baseconfig().static_config();
 	
@@ -232,11 +229,9 @@ int device_start_rf5c68(UINT8 ChipID, int clock)
 	rf5c68_state *chip;
 	int chn;
 	
-	if (ChipID >= MAX_CHIPS)
-		return 0;
-	
-	chip = &RF5C68Data[ChipID];
-	
+	chip = (rf5c68_state *) calloc(1, sizeof(rf5c68_state));	
+	*_info = (void *) chip;
+
 	chip->datasize = 0x10000;
 	chip->data = (UINT8*)malloc(chip->datasize);
 	
@@ -250,21 +245,22 @@ int device_start_rf5c68(UINT8 ChipID, int clock)
 		chip->sample_callback = NULL;*/
 	for (chn = 0; chn < NUM_CHANNELS; chn ++)
 		chip->chan[chn].Muted = 0x00;
-	
+
 	return (clock & 0x7FFFFFFF) / 384;
 }
 
-void device_stop_rf5c68(UINT8 ChipID)
+void device_stop_rf5c68(void *_info)
 {
-	rf5c68_state *chip = &RF5C68Data[ChipID];
+	rf5c68_state *chip = (rf5c68_state *)_info;
 	free(chip->data);	chip->data = NULL;
+	free(chip);
 	
 	return;
 }
 
-void device_reset_rf5c68(UINT8 ChipID)
+void device_reset_rf5c68(void *_info)
 {
-	rf5c68_state *chip = &RF5C68Data[ChipID];
+	rf5c68_state *chip = (rf5c68_state *)_info;
 	int i;
 	pcm_channel* chan;
 	mem_stream* ms = &chip->memstrm;
@@ -301,10 +297,10 @@ void device_reset_rf5c68(UINT8 ChipID)
 /************************************************/
 
 //WRITE8_DEVICE_HANDLER( rf5c68_w )
-void rf5c68_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void rf5c68_w(void *_info, offs_t offset, UINT8 data)
 {
 	//rf5c68_state *chip = get_safe_token(device);
-	rf5c68_state *chip = &RF5C68Data[ChipID];
+	rf5c68_state *chip = (rf5c68_state *)_info;
 	pcm_channel *chan = &chip->chan[chip->cbank];
 	int i;
 
@@ -369,10 +365,10 @@ void rf5c68_w(UINT8 ChipID, offs_t offset, UINT8 data)
 /************************************************/
 
 //READ8_DEVICE_HANDLER( rf5c68_mem_r )
-UINT8 rf5c68_mem_r(UINT8 ChipID, offs_t offset)
+UINT8 rf5c68_mem_r(void *_info, offs_t offset)
 {
 	//rf5c68_state *chip = get_safe_token(device);
-	rf5c68_state *chip = &RF5C68Data[ChipID];
+	rf5c68_state *chip = (rf5c68_state *)_info;
 	return chip->data[chip->wbank * 0x1000 + offset];
 }
 
@@ -382,10 +378,10 @@ UINT8 rf5c68_mem_r(UINT8 ChipID, offs_t offset)
 /************************************************/
 
 //WRITE8_DEVICE_HANDLER( rf5c68_mem_w )
-void rf5c68_mem_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void rf5c68_mem_w(void *_info, offs_t offset, UINT8 data)
 {
 	//rf5c68_state *chip = get_safe_token(device);
-	rf5c68_state *chip = &RF5C68Data[ChipID];
+	rf5c68_state *chip = (rf5c68_state *)_info;
 	rf5c68_mem_stream_flush(chip);
 	chip->data[chip->wbank * 0x1000 | offset] = data;
 }
@@ -403,9 +399,9 @@ static void rf5c68_mem_stream_flush(rf5c68_state *chip)
 	return;
 }
 
-void rf5c68_write_ram(UINT8 ChipID, offs_t DataStart, offs_t DataLength, const UINT8* RAMData)
+void rf5c68_write_ram(void *_info, offs_t DataStart, offs_t DataLength, const UINT8* RAMData)
 {
-	rf5c68_state *chip = &RF5C68Data[ChipID];
+	rf5c68_state *chip = (rf5c68_state *)_info;
 	mem_stream* ms = &chip->memstrm;
 	UINT16 BytCnt;
 	
@@ -437,9 +433,9 @@ void rf5c68_write_ram(UINT8 ChipID, offs_t DataStart, offs_t DataLength, const U
 }
 
 
-void rf5c68_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
+void rf5c68_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-	rf5c68_state *chip = &RF5C68Data[ChipID];
+	rf5c68_state *chip = (rf5c68_state *)_info;
 	unsigned char CurChn;
 	
 	for (CurChn = 0; CurChn < NUM_CHANNELS; CurChn ++)

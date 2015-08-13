@@ -129,7 +129,7 @@
 /************************************************************************/
 
 //#include "emu.h"
-#include <malloc.h>
+#include <stdlib.h>
 #include <memory.h>
 #include <math.h>
 #include "mamedef.h"
@@ -601,6 +601,7 @@ typedef struct
 	UINT8	kcode;		/* key code:                        */
 	UINT32	block_fnum;	/* current blk/fnum value for this slot (can be different betweeen slots of one channel in 3slot mode) */
 	UINT8	Muted;
+	UINT8   *IsVGMInit;
 } FM_CH;
 
 
@@ -682,6 +683,7 @@ typedef struct
 	INT32	mem;			/* one sample delay memory */
 	INT32	out_fm[6];		/* outputs of working channels */
 
+	UINT8   *IsVGMInit;
 } FM_OPN;
 
 /* here's the virtual YM2612 */
@@ -702,6 +704,8 @@ typedef struct
 	UINT8		WaveOutMode;
 	INT32		WaveL;
 	INT32		WaveR;
+
+	UINT8		PseudoSt;
 } YM2612;
 
 /* log output level */
@@ -720,8 +724,6 @@ typedef struct
 	else if ( val < min ) val = min; \
 }
 
-extern UINT8 IsVGMInit;
-static UINT8 PseudoSt = 0x00;
 /*#include <stdio.h>
 static FILE* hFile;
 static UINT32 FileSample;*/
@@ -805,7 +807,7 @@ INLINE void FM_KEYOFF(FM_OPN *OPN, FM_CH *CH , int s )
 
 	if (SLOT->key && (!OPN->SL3.key_csm || CH == &OPN->P_CH[3]))
 	{
-		if (IsVGMInit)	// workaround for VGMs trimmed with VGMTool
+		if (*OPN->IsVGMInit)	// workaround for VGMs trimmed with VGMTool
 		{
 			SLOT->state = EG_OFF;
 			SLOT->volume = MAX_ATT_INDEX;
@@ -876,7 +878,7 @@ INLINE void FM_KEYOFF_CSM(FM_CH *CH , int s )
 	FM_SLOT *SLOT = &CH->SLOT[s];
 	if (!SLOT->key)
 	{
-		if (IsVGMInit)
+		if (*CH->IsVGMInit)
 		{
 			SLOT->state = EG_OFF;
 			SLOT->volume = MAX_ATT_INDEX;
@@ -2479,8 +2481,11 @@ static void YM2612_save_state(YM2612 *F2612, running_device *device)
 //void * ym2612_init(void *param, running_device *device, int clock, int rate,
 //               FM_TIMERHANDLER timer_handler,FM_IRQHANDLER IRQHandler)
 void * ym2612_init(void *param, int clock, int rate,
-               FM_TIMERHANDLER timer_handler,FM_IRQHANDLER IRQHandler)
+               FM_TIMERHANDLER timer_handler,FM_IRQHANDLER IRQHandler,
+               UINT8 *IsVGMInit, int Flags)
 {
+	int i;
+
 	YM2612 *F2612;
 
 	/* allocate extend state space */
@@ -2503,8 +2508,10 @@ void * ym2612_init(void *param, int clock, int rate,
 	/* Extend handler */
 	F2612->OPN.ST.timer_handler = timer_handler;
 	F2612->OPN.ST.IRQ_Handler   = IRQHandler;
+
+	F2612->PseudoSt = (Flags >> 2) & 0x01;
 	
-	if (PseudoSt)
+	if (F2612->PseudoSt)
 		F2612->WaveOutMode = 0x01;
 	else
 		F2612->WaveOutMode = 0x03;
@@ -2516,6 +2523,10 @@ void * ym2612_init(void *param, int clock, int rate,
 #ifdef __STATE_H__
 	YM2612_save_state(F2612, device);
 #endif
+	F2612->OPN.IsVGMInit = IsVGMInit;
+	for (i = 0; i < 6; i++)
+		F2612->CH[i].IsVGMInit = IsVGMInit;
+
 	return F2612;
 }
 
@@ -2714,10 +2725,4 @@ void ym2612_set_mutemask(void *chip, UINT32 MuteMask)
 	return;
 }
 
-void ym2612_setoptions(UINT8 Flags)
-{
-	PseudoSt = (Flags >> 2) & 0x01;
-	
-	return;
-}
 #endif /* (BUILD_YM2612||BUILD_YM3238) */

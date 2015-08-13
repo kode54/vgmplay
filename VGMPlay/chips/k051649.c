@@ -23,7 +23,7 @@
 ***************************************************************************/
 
 #include "mamedef.h"
-#include <malloc.h>
+#include <stdlib.h>
 #include <memory.h>
 //#include "emu.h"
 //#include "streams.h"
@@ -61,9 +61,6 @@ struct _k051649_state
 	UINT8 test;
 };
 
-#define MAX_CHIPS	0x02
-static k051649_state SCC1Data[MAX_CHIPS];
-
 /*INLINE k051649_state *get_safe_token(running_device *device)
 {
 	assert(device != NULL);
@@ -98,10 +95,9 @@ static void make_mixer_table(/*running_machine *machine,*/ k051649_state *info, 
 
 /* generate sound to the mix buffer */
 //static STREAM_UPDATE( k051649_update )
-void k051649_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void k051649_update(void *param, stream_sample_t **outputs, int samples)
 {
-	//k051649_state *info = (k051649_state *)param;
-	k051649_state *info = &SCC1Data[ChipID];
+	k051649_state *info = (k051649_state *)param;
 	k051649_sound_channel *voice=info->channel_list;
 	stream_sample_t *buffer = outputs[0];
 	stream_sample_t *buffer2 = outputs[1];
@@ -146,16 +142,15 @@ void k051649_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
 }
 
 //static DEVICE_START( k051649 )
-int device_start_k051649(UINT8 ChipID, int clock)
+int device_start_k051649(void **_info, int clock)
 {
 	//k051649_state *info = get_safe_token(device);
 	k051649_state *info;
 	UINT8 CurChn;
 
-	if (ChipID >= MAX_CHIPS)
-		return 0;
+	info = (k051649_state *) calloc(1, sizeof(k051649_state));
+	*_info = (void *) info;
 	
-	info = &SCC1Data[ChipID];
 	/* get stream channels */
 	//info->rate = device->clock()/16;
 	info->rate = clock/16;
@@ -173,25 +168,27 @@ int device_start_k051649(UINT8 ChipID, int clock)
 	
 	for (CurChn = 0; CurChn < 5; CurChn ++)
 		info->channel_list[CurChn].Muted = 0x00;
-	
+
 	return info->rate;
 }
 
-void device_stop_k051649(UINT8 ChipID)
+void device_stop_k051649(void *_info)
 {
-	k051649_state *info = &SCC1Data[ChipID];
+	k051649_state *info = (k051649_state *)_info;
 	
 	free(info->mixer_buffer);
 	free(info->mixer_table);
+
+	free(info);
 	
 	return;
 }
 
 //static DEVICE_RESET( k051649 )
-void device_reset_k051649(UINT8 ChipID)
+void device_reset_k051649(void *_info)
 {
 	//k051649_state *info = get_safe_token(device);
-	k051649_state *info = &SCC1Data[ChipID];
+	k051649_state *info = (k051649_state *)_info;
 	k051649_sound_channel *voice = info->channel_list;
 	int i;
 
@@ -214,10 +211,10 @@ void device_reset_k051649(UINT8 ChipID)
 /********************************************************************************/
 
 //WRITE8_DEVICE_HANDLER( k051649_waveform_w )
-void k051649_waveform_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void k051649_waveform_w(void *_info, offs_t offset, UINT8 data)
 {
 	//k051649_state *info = get_safe_token(device);
-	k051649_state *info = &SCC1Data[ChipID];
+	k051649_state *info = (k051649_state *)_info;
 	
 	// waveram is read-only?
 	if (info->test & 0x40 || (info->test & 0x80 && offset >= 0x60))
@@ -236,10 +233,10 @@ void k051649_waveform_w(UINT8 ChipID, offs_t offset, UINT8 data)
 }
 
 //READ8_DEVICE_HANDLER ( k051649_waveform_r )
-UINT8 k051649_waveform_r(UINT8 ChipID, offs_t offset)
+UINT8 k051649_waveform_r(void *_info, offs_t offset)
 {
 	//k051649_state *info = get_safe_token(device);
-	k051649_state *info = &SCC1Data[ChipID];
+	k051649_state *info = (k051649_state *)_info;
 	
 	// test-register bits 6/7 expose the internal counter
 	if (info->test & 0xc0)
@@ -256,10 +253,10 @@ UINT8 k051649_waveform_r(UINT8 ChipID, offs_t offset)
 
 /* SY 20001114: Channel 5 doesn't share the waveform with channel 4 on this chip */
 //WRITE8_DEVICE_HANDLER( k052539_waveform_w )
-void k052539_waveform_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void k052539_waveform_w(void *_info, offs_t offset, UINT8 data)
 {
 	//k051649_state *info = get_safe_token(device);
-	k051649_state *info = &SCC1Data[ChipID];
+	k051649_state *info = (k051649_state *)_info;
 	
 	// waveram is read-only?
 	if (info->test & 0x40)
@@ -270,10 +267,10 @@ void k052539_waveform_w(UINT8 ChipID, offs_t offset, UINT8 data)
 }
 
 //READ8_DEVICE_HANDLER ( k052539_waveform_r )
-UINT8 k052539_waveform_r(UINT8 ChipID, offs_t offset)
+UINT8 k052539_waveform_r(void *_info, offs_t offset)
 {
 	//k051649_state *info = get_safe_token(device);
-	k051649_state *info = &SCC1Data[ChipID];
+	k051649_state *info = (k051649_state *)_info;
 	
 	// test-register bit 6 exposes the internal counter
 	if (info->test & 0x40)
@@ -285,19 +282,19 @@ UINT8 k052539_waveform_r(UINT8 ChipID, offs_t offset)
 }
 
 //WRITE8_DEVICE_HANDLER( k051649_volume_w )
-void k051649_volume_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void k051649_volume_w(void *_info, offs_t offset, UINT8 data)
 {
 	//k051649_state *info = get_safe_token(device);
-	k051649_state *info = &SCC1Data[ChipID];
+	k051649_state *info = (k051649_state *)_info;
 	//stream_update(info->stream);
 	info->channel_list[offset&0x7].volume=data&0xf;
 }
 
 //WRITE8_DEVICE_HANDLER( k051649_frequency_w )
-void k051649_frequency_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void k051649_frequency_w(void *_info, offs_t offset, UINT8 data)
 {
 	//k051649_state *info = get_safe_token(device);
-	k051649_state *info = &SCC1Data[ChipID];
+	k051649_state *info = (k051649_state *)_info;
 	k051649_sound_channel* chn = &info->channel_list[offset >> 1];
 
 	//stream_update(info->stream);
@@ -317,10 +314,10 @@ void k051649_frequency_w(UINT8 ChipID, offs_t offset, UINT8 data)
 }
 
 //WRITE8_DEVICE_HANDLER( k051649_keyonoff_w )
-void k051649_keyonoff_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void k051649_keyonoff_w(void *_info, offs_t offset, UINT8 data)
 {
 	//k051649_state *info = get_safe_token(device);
-	k051649_state *info = &SCC1Data[ChipID];
+	k051649_state *info = (k051649_state *)_info;
 	int i;
 	//stream_update(info->stream);
 	
@@ -332,25 +329,25 @@ void k051649_keyonoff_w(UINT8 ChipID, offs_t offset, UINT8 data)
 }
 
 //WRITE8_MEMBER( k051649_device::k051649_test_w )
-void k051649_test_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void k051649_test_w(void *_info, offs_t offset, UINT8 data)
 {
-	k051649_state *info = &SCC1Data[ChipID];
+	k051649_state *info = (k051649_state *)_info;
 	info->test = data;
 }
 
 
 //READ8_MEMBER ( k051649_device::k051649_test_r )
-UINT8 k051649_test_r(UINT8 ChipID, offs_t offset)
+UINT8 k051649_test_r(void *info, offs_t offset)
 {
 	// reading the test register sets it to $ff!
-	k051649_test_w(ChipID, offset, 0xff);
+	k051649_test_w(info, offset, 0xff);
 	return 0xff;
 }
 
 
-void k051649_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void k051649_w(void *_info, offs_t offset, UINT8 data)
 {
-	k051649_state *info = &SCC1Data[ChipID];
+	k051649_state *info = (k051649_state *)_info;
 	
 	switch(offset & 1)
 	{
@@ -361,22 +358,22 @@ void k051649_w(UINT8 ChipID, offs_t offset, UINT8 data)
 		switch(offset >> 1)
 		{
 		case 0x00:
-			k051649_waveform_w(ChipID, info->cur_reg, data);
+			k051649_waveform_w(info, info->cur_reg, data);
 			break;
 		case 0x01:
-			k051649_frequency_w(ChipID, info->cur_reg, data);
+			k051649_frequency_w(info, info->cur_reg, data);
 			break;
 		case 0x02:
-			k051649_volume_w(ChipID, info->cur_reg, data);
+			k051649_volume_w(info, info->cur_reg, data);
 			break;
 		case 0x03:
-			k051649_keyonoff_w(ChipID, info->cur_reg, data);
+			k051649_keyonoff_w(info, info->cur_reg, data);
 			break;
 		case 0x04:
-			k052539_waveform_w(ChipID, info->cur_reg, data);
+			k052539_waveform_w(info, info->cur_reg, data);
 			break;
 		case 0x05:
-			k051649_test_w(ChipID, info->cur_reg, data);
+			k051649_test_w(info, info->cur_reg, data);
 			break;
 		}
 		break;
@@ -386,9 +383,9 @@ void k051649_w(UINT8 ChipID, offs_t offset, UINT8 data)
 }
 
 
-void k051649_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
+void k051649_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-	k051649_state *info = &SCC1Data[ChipID];
+	k051649_state *info = (k051649_state *)_info;
 	UINT8 CurChn;
 	
 	for (CurChn = 0; CurChn < 5; CurChn ++)

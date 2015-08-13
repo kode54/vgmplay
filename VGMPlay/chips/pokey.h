@@ -76,15 +76,15 @@ struct _pokey_interface
 };*/
 
 
-void pokey_update(UINT8 ChipID, stream_sample_t **outputs, int samples);
-int device_start_pokey(UINT8 ChipID, int clock);
-void device_stop_pokey(UINT8 ChipID);
-void device_reset_pokey(UINT8 ChipID);
+void pokey_update(void *chip, stream_sample_t **outputs, int samples);
+int device_start_pokey(void **chip, int clock);
+void device_stop_pokey(void *chip);
+void device_reset_pokey(void *chip);
 
 //READ8_DEVICE_HANDLER( pokey_r );
 //WRITE8_DEVICE_HANDLER( pokey_w );
-UINT8 pokey_r(UINT8 ChipID, offs_t offset);
-void pokey_w(UINT8 ChipID, offs_t offset, UINT8 data);
+UINT8 pokey_r(void *chip, offs_t offset);
+void pokey_w(void *chip, offs_t offset, UINT8 data);
 
 /* fix me: eventually this should be a single device with pokey subdevices */
 //READ8_HANDLER( quad_pokey_r );
@@ -94,6 +94,6 @@ void pokey_w(UINT8 ChipID, offs_t offset, UINT8 data);
 void pokey_break_w (device_t *device, int shift);
 void pokey_kbcode_w (device_t *device, int kbcode, int make);*/
 
-void pokey_set_mute_mask(UINT8 ChipID, UINT32 MuteMask);
+void pokey_set_mute_mask(void *chip, UINT32 MuteMask);
 
 //DECLARE_LEGACY_SOUND_DEVICE(POKEY, pokey);

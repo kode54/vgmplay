@@ -17,6 +17,7 @@
 *
 ******************************************************************************/
 #include "mamedef.h"
+#include <stdlib.h>
 //#include "attotime.h"
 //#include "sndintrf.h"
 //#include "streams.h"
@@ -40,11 +41,6 @@ struct _y8950_state
 	//const device_config *device;
 };
 
-
-extern UINT8 CHIP_SAMPLING_MODE;
-extern INT32 CHIP_SAMPLE_RATE;
-#define MAX_CHIPS	0x02
-static y8950_state Y8950Data[MAX_CHIPS];
 
 /*INLINE y8950_state *get_safe_token(const device_config *device)
 {
@@ -119,12 +115,13 @@ static void Y8950KeyboardHandler_w(void *param,unsigned char data)
 }
 
 //static STREAM_UPDATE( y8950_stream_update )
-void y8950_stream_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void y8950_stream_update(void *param, stream_sample_t **outputs, int samples)
 {
-	//y8950_state *info = (y8950_state *)param;
-	y8950_state *info = &Y8950Data[ChipID];
+	y8950_state *info = (y8950_state *)param;
 	y8950_update_one(info->chip, outputs, samples);
 }
+
+static stream_sample_t* DUMMYBUF[0x02] = {NULL, NULL};
 
 static void _stream_update(void *param/*, int interval*/)
 {
@@ -136,17 +133,16 @@ static void _stream_update(void *param/*, int interval*/)
 
 
 //static DEVICE_START( y8950 )
-int device_start_y8950(UINT8 ChipID, int clock)
+int device_start_y8950(void **_info, int clock, int CHIP_SAMPLING_MODE, int CHIP_SAMPLE_RATE)
 {
 	//static const y8950_interface dummy = { 0 };
 	//y8950_state *info = get_safe_token(device);
 	y8950_state *info;
 	int rate;
 	
-	if (ChipID >= MAX_CHIPS)
-		return 0;
-	
-	info = &Y8950Data[ChipID];
+	info = (y8950_state *) calloc(1, sizeof(y8950_state));
+	*_info = (void *) info;	
+
 	rate = clock/72;
 	if ((CHIP_SAMPLING_MODE == 0x01 && rate < CHIP_SAMPLE_RATE) ||
 		CHIP_SAMPLING_MODE == 0x02)
@@ -176,78 +172,79 @@ int device_start_y8950(UINT8 ChipID, int clock)
 
 	//info->timer[0] = timer_alloc(device->machine, timer_callback_0, info);
 	//info->timer[1] = timer_alloc(device->machine, timer_callback_1, info);
-	
+
 	return rate;
 }
 
 //static DEVICE_STOP( y8950 )
-void device_stop_y8950(UINT8 ChipID)
+void device_stop_y8950(void *_info)
 {
 	//y8950_state *info = get_safe_token(device);
-	y8950_state *info = &Y8950Data[ChipID];
+	y8950_state *info = (y8950_state *)_info;
 	y8950_shutdown(info->chip);
+	free(info);
 }
 
 //static DEVICE_RESET( y8950 )
-void device_reset_y8950(UINT8 ChipID)
+void device_reset_y8950(void *_info)
 {
 	//y8950_state *info = get_safe_token(device);
-	y8950_state *info = &Y8950Data[ChipID];
+	y8950_state *info = (y8950_state *)_info;
 	y8950_reset_chip(info->chip);
 }
 
 
 //READ8_DEVICE_HANDLER( y8950_r )
-UINT8 y8950_r(UINT8 ChipID, offs_t offset)
+UINT8 y8950_r(void *_info, offs_t offset)
 {
 	//y8950_state *info = get_safe_token(device);
-	y8950_state *info = &Y8950Data[ChipID];
+	y8950_state *info = (y8950_state *)_info;
 	return y8950_read(info->chip, offset & 1);
 }
 
 //WRITE8_DEVICE_HANDLER( y8950_w )
-void y8950_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void y8950_w(void *_info, offs_t offset, UINT8 data)
 {
 	//y8950_state *info = get_safe_token(device);
-	y8950_state *info = &Y8950Data[ChipID];
+	y8950_state *info = (y8950_state *)_info;
 	y8950_write(info->chip, offset & 1, data);
 }
 
 //READ8_DEVICE_HANDLER( y8950_status_port_r )
-UINT8 y8950_status_port_r(UINT8 ChipID, offs_t offset)
+UINT8 y8950_status_port_r(void *info, offs_t offset)
 {
-	return y8950_r(ChipID, 0);
+	return y8950_r(info, 0);
 }
 //READ8_DEVICE_HANDLER( y8950_read_port_r )
-UINT8 y8950_read_port_r(UINT8 ChipID, offs_t offset)
+UINT8 y8950_read_port_r(void *info, offs_t offset)
 {
-	return y8950_r(ChipID, 1);
+	return y8950_r(info, 1);
 }
 //WRITE8_DEVICE_HANDLER( y8950_control_port_w )
-void y8950_control_port_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void y8950_control_port_w(void *info, offs_t offset, UINT8 data)
 {
-	y8950_w(ChipID, 0, data);
+	y8950_w(info, 0, data);
 }
 //WRITE8_DEVICE_HANDLER( y8950_write_port_w )
-void y8950_write_port_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void y8950_write_port_w(void *info, offs_t offset, UINT8 data)
 {
-	y8950_w(ChipID, 1, data);
+	y8950_w(info, 1, data);
 }
 
 
-void y8950_write_data_pcmrom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart,
+void y8950_write_data_pcmrom(void *_info, offs_t ROMSize, offs_t DataStart,
 							  offs_t DataLength, const UINT8* ROMData)
 {
-	y8950_state* info = &Y8950Data[ChipID];
+	y8950_state* info = (y8950_state *)_info;
 	
 	y8950_write_pcmrom(info->chip, ROMSize, DataStart, DataLength, ROMData);
 	
 	return;
 }
 
-void y8950_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
+void y8950_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-	y8950_state *info = &Y8950Data[ChipID];
+	y8950_state *info = (y8950_state *)_info;
 	opl_set_mute_mask(info->chip, MuteMask);
 }
 

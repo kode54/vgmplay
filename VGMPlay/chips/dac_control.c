@@ -20,10 +20,9 @@
 #include "dac_control.h"
 
 //#include "../ChipMapper.h"
-void chip_reg_write(UINT8 ChipType, UINT8 ChipID, UINT8 Port, UINT8 Offset, UINT8 Data);
+void chip_reg_write(void *param, UINT8 ChipType, UINT8 ChipID, UINT8 Port, UINT8 Offset, UINT8 Data);
 
-extern UINT32 SampleRate;
-#define DAC_SMPL_RATE	SampleRate
+#define DAC_SMPL_RATE	chip->SampleRate
 
 typedef struct _dac_control
 {
@@ -52,10 +51,10 @@ typedef struct _dac_control
 	UINT32 RemainCmds;
 	UINT32 RealPos;		// true Position in Data (== Pos, if Reverse is off)
 	UINT8 DataStep;		// always StepSize * CmdSize
-} dac_control;
 
-#define MAX_CHIPS	0xFF
-static dac_control DACData[MAX_CHIPS];
+	void* param;
+	UINT32 SampleRate;
+} dac_control;
 
 #define NULL	(void*)0
 
@@ -82,13 +81,13 @@ INLINE void daccontrol_SendCommand(dac_control *chip)
 		Port = (chip->DstCommand & 0xFF00) >> 8;
 		Command = (chip->DstCommand & 0x00FF) >> 0;
 		Data = ChipData[0x00];
-		chip_reg_write(chip->DstChipType, chip->DstChipID, Port, Command, Data);
+		chip_reg_write(chip->param, chip->DstChipType, chip->DstChipID, Port, Command, Data);
 		break;
 	case 0x11:	// PWM (4-bit Register, 12-bit Data)
 		Port = (chip->DstCommand & 0x000F) >> 0;
 		Command = ChipData[0x01] & 0x0F;
 		Data = ChipData[0x00];
-		chip_reg_write(chip->DstChipType, chip->DstChipID, Port, Command, Data);
+		chip_reg_write(chip->param, chip->DstChipType, chip->DstChipID, Port, Command, Data);
 		break;
 	// Support for other chips (mainly for completeness)
 	case 0x00:	// SN76496 (4-bit Register, 4-bit/10-bit Data)
@@ -97,14 +96,14 @@ INLINE void daccontrol_SendCommand(dac_control *chip)
 		if (Command & 0x10)
 		{
 			// Volume Change (4-Bit value)
-			chip_reg_write(chip->DstChipType, chip->DstChipID, 0x00, 0x00, Command | Data);
+			chip_reg_write(chip->param, chip->DstChipType, chip->DstChipID, 0x00, 0x00, Command | Data);
 		}
 		else
 		{
 			// Frequency Write (10-Bit value)
 			Port = ((ChipData[0x01] & 0x03) << 4) | ((ChipData[0x00] & 0xF0) >> 4);
-			chip_reg_write(chip->DstChipType, chip->DstChipID, 0x00, 0x00, Command | Data);
-			chip_reg_write(chip->DstChipType, chip->DstChipID, 0x00, 0x00, Port);
+			chip_reg_write(chip->param, chip->DstChipType, chip->DstChipID, 0x00, 0x00, Command | Data);
+			chip_reg_write(chip->param, chip->DstChipType, chip->DstChipID, 0x00, 0x00, Port);
 		}
 		break;
 	case 0x18:	// OKIM6295 - TODO: verify
@@ -118,19 +117,19 @@ INLINE void daccontrol_SendCommand(dac_control *chip)
 			{
 				// Sample Start
 				// write sample ID
-				chip_reg_write(chip->DstChipType, chip->DstChipID, 0x00, Command, Data);
+				chip_reg_write(chip->param, chip->DstChipType, chip->DstChipID, 0x00, Command, Data);
 				// write channel(s) that should play the sample
-				chip_reg_write(chip->DstChipType, chip->DstChipID, 0x00, Command, Port << 4);
+				chip_reg_write(chip->param, chip->DstChipType, chip->DstChipID, 0x00, Command, Port << 4);
 			}
 			else
 			{
 				// Sample Stop
-				chip_reg_write(chip->DstChipType, chip->DstChipID, 0x00, Command, Port << 3);
+				chip_reg_write(chip->param, chip->DstChipType, chip->DstChipID, 0x00, Command, Port << 3);
 			}
 		}
 		else
 		{
-			chip_reg_write(chip->DstChipType, chip->DstChipID, 0x00, Command, Data);
+			chip_reg_write(chip->param, chip->DstChipType, chip->DstChipID, 0x00, Command, Data);
 		}
 		break;
 		// Generic support: 8-bit Register, 8-bit Data
@@ -151,7 +150,7 @@ INLINE void daccontrol_SendCommand(dac_control *chip)
 	case 0x1E:	// Pokey - TODO: Verify
 		Command = (chip->DstCommand & 0x00FF) >> 0;
 		Data = ChipData[0x00];
-		chip_reg_write(chip->DstChipType, chip->DstChipID, 0x00, Command, Data);
+		chip_reg_write(chip->param, chip->DstChipType, chip->DstChipID, 0x00, Command, Data);
 		break;
 		// Generic support: 16-bit Register, 8-bit Data
 	case 0x07:	// YM2608
@@ -165,7 +164,7 @@ INLINE void daccontrol_SendCommand(dac_control *chip)
 		Port = (chip->DstCommand & 0xFF00) >> 8;
 		Command = (chip->DstCommand & 0x00FF) >> 0;
 		Data = ChipData[0x00];
-		chip_reg_write(chip->DstChipType, chip->DstChipID, Port, Command, Data);
+		chip_reg_write(chip->param, chip->DstChipType, chip->DstChipID, Port, Command, Data);
 		break;
 		// Generic support: 8-bit Register with Channel Select, 8-bit Data
 	case 0x05:	// RF5C68
@@ -176,14 +175,14 @@ INLINE void daccontrol_SendCommand(dac_control *chip)
 		Data = ChipData[0x00];
 		
 		if (Port != 0xFF)	// Send Channel Select
-			chip_reg_write(chip->DstChipType, chip->DstChipID, 0x00, Command >> 4, Port);
+			chip_reg_write(chip->param, chip->DstChipType, chip->DstChipID, 0x00, Command >> 4, Port);
 		// Send Data
-		chip_reg_write(chip->DstChipType, chip->DstChipID, 0x00, Command & 0x0F, Data);
+		chip_reg_write(chip->param, chip->DstChipType, chip->DstChipID, 0x00, Command & 0x0F, Data);
 		break;
 		// Generic support: 8-bit Register, 16-bit Data
 	case 0x1F:	// QSound
 		Command = (chip->DstCommand & 0x00FF) >> 0;
-		chip_reg_write(chip->DstChipType, chip->DstChipID, ChipData[0x00], ChipData[0x01], Command);
+		chip_reg_write(chip->param, chip->DstChipType, chip->DstChipID, ChipData[0x00], ChipData[0x01], Command);
 		break;
 	}
 	chip->Running |= 0x10;
@@ -197,9 +196,9 @@ INLINE UINT32 muldiv64round(UINT32 Multiplicand, UINT32 Multiplier, UINT32 Divis
 	return (UINT32)(((UINT64)Multiplicand * Multiplier + Divisor / 2) / Divisor);
 }
 
-void daccontrol_update(UINT8 ChipID, UINT32 samples)
+void daccontrol_update(void *_info, UINT32 samples)
 {
-	dac_control *chip = &DACData[ChipID];
+	dac_control *chip = (dac_control *)_info;
 	UINT32 NewPos;
 	INT16 RealDataStp;
 	
@@ -258,14 +257,15 @@ void daccontrol_update(UINT8 ChipID, UINT32 samples)
 	return;
 }
 
-UINT8 device_start_daccontrol(UINT8 ChipID)
+UINT8 device_start_daccontrol(void **_info, void *param, int SampleRate)
 {
 	dac_control *chip;
 	
-	if (ChipID >= MAX_CHIPS)
-		return 0;
-	
-	chip = &DACData[ChipID];
+	chip = (dac_control *) calloc(1, sizeof(dac_control));
+	*_info = (void *) chip;
+
+	chip->param = param;
+	chip->SampleRate = SampleRate;
 	
 	chip->DstChipType = 0xFF;
 	chip->DstChipID = 0x00;
@@ -276,18 +276,20 @@ UINT8 device_start_daccontrol(UINT8 ChipID)
 	return 1;
 }
 
-void device_stop_daccontrol(UINT8 ChipID)
+void device_stop_daccontrol(void *_info)
 {
-	dac_control *chip = &DACData[ChipID];
+	dac_control *chip = (dac_control *)_info;
 	
 	chip->Running = 0xFF;
+
+	free(chip);
 	
 	return;
 }
 
-void device_reset_daccontrol(UINT8 ChipID)
+void device_reset_daccontrol(void *_info)
 {
-	dac_control *chip = &DACData[ChipID];
+	dac_control *chip = (dac_control *)_info;
 	
 	chip->DstChipType = 0x00;
 	chip->DstChipID = 0x00;
@@ -312,9 +314,9 @@ void device_reset_daccontrol(UINT8 ChipID)
 	return;
 }
 
-void daccontrol_setup_chip(UINT8 ChipID, UINT8 ChType, UINT8 ChNum, UINT16 Command)
+void daccontrol_setup_chip(void *_info, UINT8 ChType, UINT8 ChNum, UINT16 Command)
 {
-	dac_control *chip = &DACData[ChipID];
+	dac_control *chip = (dac_control *)_info;
 	
 	chip->DstChipType = ChType;	// TypeID (e.g. 0x02 for YM2612)
 	chip->DstChipID = ChNum;	// chip number (to send commands to 1st or 2nd chip)
@@ -344,9 +346,9 @@ void daccontrol_setup_chip(UINT8 ChipID, UINT8 ChType, UINT8 ChNum, UINT16 Comma
 	return;
 }
 
-void daccontrol_set_data(UINT8 ChipID, UINT8* Data, UINT32 DataLen, UINT8 StepSize, UINT8 StepBase)
+void daccontrol_set_data(void *_info, UINT8* Data, UINT32 DataLen, UINT8 StepSize, UINT8 StepBase)
 {
-	dac_control *chip = &DACData[ChipID];
+	dac_control *chip = (dac_control *)_info;
 	
 	if (chip->Running & 0x80)
 		return;
@@ -368,10 +370,10 @@ void daccontrol_set_data(UINT8 ChipID, UINT8* Data, UINT32 DataLen, UINT8 StepSi
 	return;
 }
 
-void daccontrol_refresh_data(UINT8 ChipID, UINT8* Data, UINT32 DataLen)
+void daccontrol_refresh_data(void *_info, UINT8* Data, UINT32 DataLen)
 {
 	// Should be called to fix the data pointer. (e.g. after a realloc)
-	dac_control *chip = &DACData[ChipID];
+	dac_control *chip = (dac_control *)_info;
 	
 	if (chip->Running & 0x80)
 		return;
@@ -390,9 +392,9 @@ void daccontrol_refresh_data(UINT8 ChipID, UINT8* Data, UINT32 DataLen)
 	return;
 }
 
-void daccontrol_set_frequency(UINT8 ChipID, UINT32 Frequency)
+void daccontrol_set_frequency(void *_info, UINT32 Frequency)
 {
-	dac_control *chip = &DACData[ChipID];
+	dac_control *chip = (dac_control *)_info;
 	
 	if (chip->Running & 0x80)
 		return;
@@ -402,9 +404,9 @@ void daccontrol_set_frequency(UINT8 ChipID, UINT32 Frequency)
 	return;
 }
 
-void daccontrol_start(UINT8 ChipID, UINT32 DataPos, UINT8 LenMode, UINT32 Length)
+void daccontrol_start(void *_info, UINT32 DataPos, UINT8 LenMode, UINT32 Length)
 {
-	dac_control *chip = &DACData[ChipID];
+	dac_control *chip = (dac_control *)_info;
 	UINT16 CmdStepBase;
 	
 	if (chip->Running & 0x80)
@@ -457,9 +459,9 @@ void daccontrol_start(UINT8 ChipID, UINT32 DataPos, UINT8 LenMode, UINT32 Length
 	return;
 }
 
-void daccontrol_stop(UINT8 ChipID)
+void daccontrol_stop(void *_info)
 {
-	dac_control *chip = &DACData[ChipID];
+	dac_control *chip = (dac_control *)_info;
 	
 	if (chip->Running & 0x80)
 		return;

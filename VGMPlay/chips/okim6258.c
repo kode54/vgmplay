@@ -15,6 +15,7 @@
 #include <stdio.h>
 #endif
 //#include "streams.h"
+#include <stdlib.h>
 #include <math.h>
 #include "okim6258.h"
 
@@ -68,6 +69,9 @@ struct _okim6258_state
 	
 	SRATE_CALLBACK SmpRateFunc;
 	void* SmpRateData;
+
+	UINT8 Iternal10Bit;
+	UINT8 DCRemoval;
 };
 
 /* step size index shift table */
@@ -79,10 +83,6 @@ static int diff_lookup[49*16];
 /* tables computed? */
 static int tables_computed = 0;
 
-#define MAX_CHIPS	0x02
-static okim6258_state OKIM6258Data[MAX_CHIPS];
-static UINT8 Iternal10Bit = 0x00;
-static UINT8 DCRemoval = 0x00;
 
 /*INLINE okim6258_state *get_safe_token(running_device *device)
 {
@@ -165,10 +165,9 @@ static INT16 clock_adpcm(okim6258_state *chip, UINT8 nibble)
 ***********************************************************************************************/
 
 //static STREAM_UPDATE( okim6258_update )
-void okim6258_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void okim6258_update(void *param, stream_sample_t **outputs, int samples)
 {
-	//okim6258_state *chip = (okim6258_state *)param;
-	okim6258_state *chip = &OKIM6258Data[ChipID];
+	okim6258_state *chip = (okim6258_state *)param;
 	//stream_sample_t *buffer = outputs[0];
 	stream_sample_t *bufL = outputs[0];
 	stream_sample_t *bufR = outputs[1];
@@ -288,16 +287,17 @@ static int get_vclk(okim6258_state* info)
 }
 
 //static DEVICE_START( okim6258 )
-int device_start_okim6258(UINT8 ChipID, int clock, int divider, int adpcm_type, int output_12bits)
+int device_start_okim6258(void **_info, int clock, int Options, int divider, int adpcm_type, int output_12bits)
 {
 	//const okim6258_interface *intf = (const okim6258_interface *)device->baseconfig().static_config();
 	//okim6258_state *info = get_safe_token(device);
 	okim6258_state *info;
 
-	if (ChipID >= MAX_CHIPS)
-		return 0;
-	
-	info = &OKIM6258Data[ChipID];
+	info = (okim6258_state *) calloc(1, sizeof(okim6258_state));
+	*_info = (void *) info;
+
+	info->Iternal10Bit = (Options >> 0) & 0x01;
+	info->DCRemoval = (Options >> 1) & 0x01;
 	
 	compute_tables();
 
@@ -314,7 +314,7 @@ int device_start_okim6258(UINT8 ChipID, int clock, int divider, int adpcm_type, 
 
 	/* D/A precision is 10-bits but 12-bit data can be output serially to an external DAC */
 	info->output_bits = /*intf->*/output_12bits ? 12 : 10;
-	if (Iternal10Bit)
+	if (info->Iternal10Bit)
 		info->output_mask = (1 << (info->output_bits - 1));
 	else
 		info->output_mask = (1 << (12 - 1));
@@ -326,7 +326,7 @@ int device_start_okim6258(UINT8 ChipID, int clock, int divider, int adpcm_type, 
 	info->step = 0;
 
 	//okim6258_state_save_register(info, device);
-	
+
 	return get_vclk(info);
 }
 
@@ -337,18 +337,18 @@ int device_start_okim6258(UINT8 ChipID, int clock, int divider, int adpcm_type, 
 
 ***********************************************************************************************/
 
-void device_stop_okim6258(UINT8 ChipID)
+void device_stop_okim6258(void *info)
 {
-	okim6258_state *info = &OKIM6258Data[ChipID];
+	free(info);
 	
 	return;
 }
 
 //static DEVICE_RESET( okim6258 )
-void device_reset_okim6258(UINT8 ChipID)
+void device_reset_okim6258(void *_info)
 {
 	//okim6258_state *info = get_safe_token(device);
-	okim6258_state *info = &OKIM6258Data[ChipID];
+	okim6258_state *info = (okim6258_state *)_info;
 
 	//stream_update(info->stream);
 	
@@ -382,10 +382,10 @@ void device_reset_okim6258(UINT8 ChipID)
 ***********************************************************************************************/
 
 //void okim6258_set_divider(running_device *device, int val)
-void okim6258_set_divider(UINT8 ChipID, int val)
+void okim6258_set_divider(void *_info, int val)
 {
 	//okim6258_state *info = get_safe_token(device);
-	okim6258_state *info = &OKIM6258Data[ChipID];
+	okim6258_state *info = (okim6258_state *)_info;
 	int divider = dividers[val];
 
 	info->divider = dividers[val];
@@ -402,10 +402,10 @@ void okim6258_set_divider(UINT8 ChipID, int val)
 ***********************************************************************************************/
 
 //void okim6258_set_clock(running_device *device, int val)
-void okim6258_set_clock(UINT8 ChipID, int val)
+void okim6258_set_clock(void *_info, int val)
 {
 	//okim6258_state *info = get_safe_token(device);
-	okim6258_state *info = &OKIM6258Data[ChipID];
+	okim6258_state *info = (okim6258_state *)_info;
 
 	if (val)
 	{
@@ -431,10 +431,10 @@ void okim6258_set_clock(UINT8 ChipID, int val)
 ***********************************************************************************************/
 
 //int okim6258_get_vclk(running_device *device)
-int okim6258_get_vclk(UINT8 ChipID)
+int okim6258_get_vclk(void *_info)
 {
 	//okim6258_state *info = get_safe_token(device);
-	okim6258_state *info = &OKIM6258Data[ChipID];
+	okim6258_state *info = (okim6258_state *)_info;
 
 	return get_vclk(info);
 }
@@ -464,10 +464,10 @@ int okim6258_get_vclk(UINT8 ChipID)
 
 ***********************************************************************************************/
 //WRITE8_DEVICE_HANDLER( okim6258_data_w )
-static void okim6258_data_w(UINT8 ChipID, /*offs_t offset, */UINT8 data)
+static void okim6258_data_w(void *_info, /*offs_t offset, */UINT8 data)
 {
 	//okim6258_state *info = get_safe_token(device);
-	okim6258_state *info = &OKIM6258Data[ChipID];
+	okim6258_state *info = (okim6258_state *)_info;
 
 	/* update the stream */
 	//stream_update(info->stream);
@@ -497,10 +497,10 @@ static void okim6258_data_w(UINT8 ChipID, /*offs_t offset, */UINT8 data)
 ***********************************************************************************************/
 
 //WRITE8_DEVICE_HANDLER( okim6258_ctrl_w )
-static void okim6258_ctrl_w(UINT8 ChipID, /*offs_t offset, */UINT8 data)
+static void okim6258_ctrl_w(void *_info, /*offs_t offset, */UINT8 data)
 {
 	//okim6258_state *info = get_safe_token(device);
-	okim6258_state *info = &OKIM6258Data[ChipID];
+	okim6258_state *info = (okim6258_state *)_info;
 
 	//stream_update(info->stream);
 
@@ -512,7 +512,7 @@ static void okim6258_ctrl_w(UINT8 ChipID, /*offs_t offset, */UINT8 data)
 
 	if (data & COMMAND_PLAY)
 	{
-		if (!(info->status & STATUS_PLAYING) || DCRemoval)
+		if (!(info->status & STATUS_PLAYING) || info->DCRemoval)
 		{
 			info->status |= STATUS_PLAYING;
 
@@ -548,18 +548,18 @@ static void okim6258_ctrl_w(UINT8 ChipID, /*offs_t offset, */UINT8 data)
 	}
 }
 
-static void okim6258_set_clock_byte(UINT8 ChipID, UINT8 Byte, UINT8 val)
+static void okim6258_set_clock_byte(void *_info, UINT8 Byte, UINT8 val)
 {
-	okim6258_state *info = &OKIM6258Data[ChipID];
+	okim6258_state *info = (okim6258_state *)_info;
 	
 	info->clock_buffer[Byte] = val;
 	
 	return;
 }
 
-static void okim6258_pan_w(UINT8 ChipID, UINT8 data)
+static void okim6258_pan_w(void *_info, UINT8 data)
 {
-	okim6258_state *info = &OKIM6258Data[ChipID];
+	okim6258_state *info = (okim6258_state *)_info;
 
 	info->pan = data;
 	
@@ -567,30 +567,30 @@ static void okim6258_pan_w(UINT8 ChipID, UINT8 data)
 }
 
 
-void okim6258_write(UINT8 ChipID, UINT8 Port, UINT8 Data)
+void okim6258_write(void *info, UINT8 Port, UINT8 Data)
 {
 	switch(Port)
 	{
 	case 0x00:
-		okim6258_ctrl_w(ChipID, /*0x00, */Data);
+		okim6258_ctrl_w(info, /*0x00, */Data);
 		break;
 	case 0x01:
-		okim6258_data_w(ChipID, /*0x00, */Data);
+		okim6258_data_w(info, /*0x00, */Data);
 		break;
 	case 0x02:
-		okim6258_pan_w(ChipID, Data);
+		okim6258_pan_w(info, Data);
 		break;
 	case 0x08:
 	case 0x09:
 	case 0x0A:
-		okim6258_set_clock_byte(ChipID, Port & 0x03, Data);
+		okim6258_set_clock_byte(info, Port & 0x03, Data);
 		break;
 	case 0x0B:
-		okim6258_set_clock_byte(ChipID, Port & 0x03, Data);
-		okim6258_set_clock(ChipID, 0);
+		okim6258_set_clock_byte(info, Port & 0x03, Data);
+		okim6258_set_clock(info, 0);
 		break;
 	case 0x0C:
-		okim6258_set_divider(ChipID, Data);
+		okim6258_set_divider(info, Data);
 		break;
 	}
 	
@@ -598,17 +598,9 @@ void okim6258_write(UINT8 ChipID, UINT8 Port, UINT8 Data)
 }
 
 
-void okim6258_set_options(UINT16 Options)
+void okim6258_set_srchg_cb(void *_info, SRATE_CALLBACK CallbackFunc, void* DataPtr)
 {
-	Iternal10Bit = (Options >> 0) & 0x01;
-	DCRemoval = (Options >> 1) & 0x01;
-	
-	return;
-}
-
-void okim6258_set_srchg_cb(UINT8 ChipID, SRATE_CALLBACK CallbackFunc, void* DataPtr)
-{
-	okim6258_state *info = &OKIM6258Data[ChipID];
+	okim6258_state *info = (okim6258_state *)_info;
 	
 	// set Sample Rate Change Callback routine
 	info->SmpRateFunc = CallbackFunc;

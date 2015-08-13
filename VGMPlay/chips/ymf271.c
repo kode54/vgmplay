@@ -33,7 +33,7 @@
 #ifdef _DEBUG
 #include <stdio.h>
 #endif
-#include <malloc.h>
+#include <stdlib.h>
 #include <memory.h>
 #include "ymf271.h"
 
@@ -328,9 +328,6 @@ typedef struct
 	//void (*irq_callback)(int);
 } YMF271Chip;
 
-
-#define MAX_CHIPS	0x10
-static YMF271Chip YMF271Data[MAX_CHIPS];
 
 /*INLINE YMF271Chip *get_safe_token(const device_config *device)
 {
@@ -681,13 +678,12 @@ static void set_feedback(YMF271Chip *chip, int slotnum, INT64 inp)
 }
 
 //static STREAM_UPDATE( ymf271_update )
-void ymf271_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void ymf271_update(void *param, stream_sample_t **outputs, int samples)
 {
 	int i, j;
 	int op;
 	INT32 *mixp;
-	//YMF271Chip *chip = (YMF271Chip *)param;
-	YMF271Chip *chip = &YMF271Data[ChipID];
+	YMF271Chip *chip = (YMF271Chip *)param;
 
 	memset(chip->mix_buffer, 0, sizeof(chip->mix_buffer[0])*samples*2);
 
@@ -1557,10 +1553,10 @@ static void ymf271_write_timer(YMF271Chip *chip, UINT8 address, UINT8 data)
 }
 
 //WRITE8_DEVICE_HANDLER( ymf271_w )
-void ymf271_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void ymf271_w(void *_info, offs_t offset, UINT8 data)
 {
 	//YMF271Chip *chip = get_safe_token(device);
-	YMF271Chip *chip = &YMF271Data[ChipID];
+	YMF271Chip *chip = (YMF271Chip *)_info;
 
 	chip->regs_main[offset & 0xf] = data;
 
@@ -1605,10 +1601,10 @@ void ymf271_w(UINT8 ChipID, offs_t offset, UINT8 data)
 }
 
 //READ8_DEVICE_HANDLER( ymf271_r )
-UINT8 ymf271_r(UINT8 ChipID, offs_t offset)
+UINT8 ymf271_r(void *_info, offs_t offset)
 {
 	//YMF271Chip *chip = get_safe_token(device);
-	YMF271Chip *chip = &YMF271Data[ChipID];
+	YMF271Chip *chip = (YMF271Chip *)_info;
 
 	switch (offset & 0xf)
 	{
@@ -1838,7 +1834,7 @@ static void init_tables(YMF271Chip *chip)
 }*/
 
 //static DEVICE_START( ymf271 )
-int device_start_ymf271(UINT8 ChipID, int clock)
+int device_start_ymf271(void **_info, int clock)
 {
 	//static const ymf271_interface defintrf = { DEVCB_NULL };
 	//const ymf271_interface *intf;
@@ -1846,10 +1842,9 @@ int device_start_ymf271(UINT8 ChipID, int clock)
 	//YMF271Chip *chip = get_safe_token(device);
 	YMF271Chip *chip;
 
-	if (ChipID >= MAX_CHIPS)
-		return 0;
-	
-	chip = &YMF271Data[ChipID];
+	chip = (YMF271Chip *) calloc(1, sizeof(YMF271Chip));
+	*_info = (void *) chip;
+
 	//chip->device = device;
 	chip->clock = clock;
 
@@ -1872,10 +1867,10 @@ int device_start_ymf271(UINT8 ChipID, int clock)
 }
 
 //static DEVICE_STOP( ymf271 )
-void device_stop_ymf271(UINT8 ChipID)
+void device_stop_ymf271(void *_info)
 {
 	int i;
-	YMF271Chip *chip = &YMF271Data[ChipID];
+	YMF271Chip *chip = (YMF271Chip *)_info;
 	
 	free(chip->mem_base);	chip->mem_base = NULL;
 	
@@ -1898,16 +1893,18 @@ void device_stop_ymf271(UINT8 ChipID)
 	
 	free(chip->mix_buffer);
 	chip->mix_buffer = NULL;
+
+	free(chip);
 	
 	return;
 }
 
 //static DEVICE_RESET( ymf271 )
-void device_reset_ymf271(UINT8 ChipID)
+void device_reset_ymf271(void *_info)
 {
 	int i;
 	//YMF271Chip *chip = get_safe_token(device);
-	YMF271Chip *chip = &YMF271Data[ChipID];
+	YMF271Chip *chip = (YMF271Chip *)_info;
 
 	for (i = 0; i < 48; i++)
 	{
@@ -1927,10 +1924,10 @@ void device_reset_ymf271(UINT8 ChipID)
 	//	chip->irq_handler(0);
 }
 
-void ymf271_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
+void ymf271_write_rom(void *_info, offs_t ROMSize, offs_t DataStart, offs_t DataLength,
 					  const UINT8* ROMData)
 {
-	YMF271Chip *chip = &YMF271Data[ChipID];
+	YMF271Chip *chip = (YMF271Chip *)_info;
 	
 	if (chip->mem_size != ROMSize)
 	{
@@ -1948,9 +1945,9 @@ void ymf271_write_rom(UINT8 ChipID, offs_t ROMSize, offs_t DataStart, offs_t Dat
 	return;
 }
 
-void ymf271_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
+void ymf271_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-	YMF271Chip *chip = &YMF271Data[ChipID];
+	YMF271Chip *chip = (YMF271Chip *)_info;
 	UINT8 CurChn;
 	
 	for (CurChn = 0; CurChn < 12; CurChn ++)

@@ -38,7 +38,7 @@
 
 //#include "emu.h"
 //#include "streams.h"
-#include <malloc.h>
+#include <stdlib.h>
 #include <string.h>
 #include "mamedef.h"
 #include "es5503.h"
@@ -87,9 +87,6 @@ typedef struct
 	SRATE_CALLBACK SmpRateFunc;
 	void* SmpRateData;
 } ES5503Chip;
-
-#define MAX_CHIPS	0x02
-static ES5503Chip ES5503Data[MAX_CHIPS];
 
 /*INLINE ES5503Chip *get_safe_token(running_device *device)
 {
@@ -165,7 +162,7 @@ static void es5503_halt_osc(ES5503Chip *chip, int onum, int type, UINT32 *accumu
 }
 
 //static STREAM_UPDATE( es5503_pcm_update )
-void es5503_pcm_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void es5503_pcm_update(void *param, stream_sample_t **outputs, int samples)
 {
 	// Note: The advantage of NOT using this buffer is not only less RAM usage,
 	//       but also a huge speedup. This is, because the array is not marked
@@ -174,8 +171,7 @@ void es5503_pcm_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
 	//INT32 *mixp;
 	int osc, snum;
 	UINT32 ramptr;
-	//ES5503Chip *chip = (ES5503Chip *)param;
-	ES5503Chip *chip = &ES5503Data[ChipID];
+	ES5503Chip *chip = (ES5503Chip *)param;
 	int chnsStereo, chan;
 
 	memset(outputs[0], 0x00, samples * sizeof(stream_sample_t));
@@ -270,17 +266,15 @@ void es5503_pcm_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
 
 
 //static DEVICE_START( es5503 )
-int device_start_es5503(UINT8 ChipID, int clock, int channels)
+int device_start_es5503(void **_info, int clock, int channels)
 {
 	//const es5503_interface *intf;
 	int osc;
 	//ES5503Chip *chip = get_safe_token(device);
 	ES5503Chip *chip;
 
-	if (ChipID >= MAX_CHIPS)
-		return 0;
-	
-	chip = &ES5503Data[ChipID];
+	chip = (ES5503Chip *) calloc(1, sizeof(ES5503Chip));
+	*_info = (void *) chip;
 	
 	//intf = (const es5503_interface *)device->baseconfig().static_config();
 
@@ -324,18 +318,20 @@ int device_start_es5503(UINT8 ChipID, int clock, int channels)
 	return chip->output_rate;
 }
 
-void device_stop_es5503(UINT8 ChipID)
+void device_stop_es5503(void *_info)
 {
-	ES5503Chip *chip = &ES5503Data[ChipID];
+	ES5503Chip *chip = (ES5503Chip *)_info;
 	
 	free(chip->docram);	chip->docram = NULL;
-	
+
+	free(chip);	
+
 	return;
 }
 
-void device_reset_es5503(UINT8 ChipID)
+void device_reset_es5503(void *_info)
 {
-	ES5503Chip *chip = &ES5503Data[ChipID];
+	ES5503Chip *chip = (ES5503Chip *)_info;
 	int osc;
 	ES5503Osc* tempOsc;
 	
@@ -368,12 +364,12 @@ void device_reset_es5503(UINT8 ChipID)
 
 
 //READ8_DEVICE_HANDLER( es5503_r )
-UINT8 es5503_r(UINT8 ChipID, offs_t offset)
+UINT8 es5503_r(void *_info, offs_t offset)
 {
 	UINT8 retval;
 	int i;
 	//ES5503Chip *chip = get_safe_token(device);
-	ES5503Chip *chip = &ES5503Data[ChipID];
+	ES5503Chip *chip = (ES5503Chip *)_info;
 
 	//stream_update(chip->stream);
 
@@ -474,10 +470,10 @@ UINT8 es5503_r(UINT8 ChipID, offs_t offset)
 }
 
 //WRITE8_DEVICE_HANDLER( es5503_w )
-void es5503_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void es5503_w(void *_info, offs_t offset, UINT8 data)
 {
 	//ES5503Chip *chip = get_safe_token(device);
-	ES5503Chip *chip = &ES5503Data[ChipID];
+	ES5503Chip *chip = (ES5503Chip *)_info;
 
 	//stream_update(chip->stream);
 
@@ -563,9 +559,9 @@ void es5503_w(UINT8 ChipID, offs_t offset, UINT8 data)
 	chip->docram = wavemem;
 }*/
 
-void es5503_write_ram(UINT8 ChipID, offs_t DataStart, offs_t DataLength, const UINT8* RAMData)
+void es5503_write_ram(void *_info, offs_t DataStart, offs_t DataLength, const UINT8* RAMData)
 {
-	ES5503Chip *chip = &ES5503Data[ChipID];
+	ES5503Chip *chip = (ES5503Chip *)_info;
 	
 	if (DataStart >= chip->dramsize)
 		return;
@@ -577,9 +573,9 @@ void es5503_write_ram(UINT8 ChipID, offs_t DataStart, offs_t DataLength, const U
 	return;
 }
 
-void es5503_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
+void es5503_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-	ES5503Chip *chip = &ES5503Data[ChipID];
+	ES5503Chip *chip = (ES5503Chip *)_info;
 	UINT8 CurChn;
 	
 	for (CurChn = 0; CurChn < 32; CurChn ++)
@@ -588,9 +584,9 @@ void es5503_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
 	return;
 }
 
-void es5503_set_srchg_cb(UINT8 ChipID, SRATE_CALLBACK CallbackFunc, void* DataPtr)
+void es5503_set_srchg_cb(void *_info, SRATE_CALLBACK CallbackFunc, void* DataPtr)
 {
-	ES5503Chip *chip = &ES5503Data[ChipID];
+	ES5503Chip *chip = (ES5503Chip *)_info;
 	
 	// set Sample Rate Change Callback routine
 	chip->SmpRateFunc = CallbackFunc;

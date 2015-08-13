@@ -51,6 +51,7 @@
 
 #include "mamedef.h"
 //#include "emu.h"
+#include <stdlib.h>
 #ifdef _DEBUG
 #include <stdio.h>
 #endif
@@ -536,14 +537,10 @@ struct _pokey_state
 }*/
 
 
-#define MAX_CHIPS	0x02
-static pokey_state PokeyData[MAX_CHIPS];
-
 //static STREAM_UPDATE( pokey_update )
-void pokey_update(UINT8 ChipID, stream_sample_t **outputs, int samples)
+void pokey_update(void *param, stream_sample_t **outputs, int samples)
 {
-	//pokey_state *chip = (pokey_state *)param;
-	pokey_state *chip = &PokeyData[ChipID];
+	pokey_state *chip = (pokey_state *)param;
 	//stream_sample_t *buffer = outputs[0];
 	stream_sample_t *bufL = outputs[0];
 	stream_sample_t *bufR = outputs[1];
@@ -624,7 +621,7 @@ static void rand_init(UINT8 *rng, int size, int left, int right, int add)
 
 
 //static DEVICE_START( pokey )
-int device_start_pokey(UINT8 ChipID, int clock)
+int device_start_pokey(void **_info, int clock)
 {
 	//pokey_state *chip = get_safe_token(device);
 	pokey_state *chip;
@@ -632,10 +629,8 @@ int device_start_pokey(UINT8 ChipID, int clock)
 	int sample_rate = clock;
 	//int i;
 
-	if (ChipID >= MAX_CHIPS)
-		return 0;
-	
-	chip = &PokeyData[ChipID];
+	chip = (pokey_state *) calloc(1, sizeof(pokey_state));
+	*_info = (void *) chip;
 	
 	//if (device->static_config())
 	//	memcpy(&chip->intf, device->static_config(), sizeof(pokey_interface));
@@ -691,20 +686,20 @@ int device_start_pokey(UINT8 ChipID, int clock)
 	//chip->channel = device->machine().sound().stream_alloc(*device, 0, 1, sample_rate, chip, pokey_update);
 
 	//register_for_save(chip, device);
-	
+
 	return sample_rate;
 }
 
-void device_stop_pokey(UINT8 ChipID)
+void device_stop_pokey(void *chip)
 {
-	pokey_state *chip = &PokeyData[ChipID];
+	free(chip);
 	
 	return;
 }
 
-void device_reset_pokey(UINT8 ChipID)
+void device_reset_pokey(void *_info)
 {
-	pokey_state *chip = &PokeyData[ChipID];
+	pokey_state *chip = (pokey_state *)_info;
 	UINT8 CurChn;
 	
 	for (CurChn = 0; CurChn < 4; CurChn ++)
@@ -874,10 +869,10 @@ static void pokey_potgo(pokey_state *p)
 }*/
 
 //READ8_DEVICE_HANDLER( pokey_r )
-UINT8 pokey_r(UINT8 ChipID, offs_t offset)
+UINT8 pokey_r(void *_info, offs_t offset)
 {
 	//pokey_state *p = get_safe_token(device);
-	pokey_state *p = &PokeyData[ChipID];
+	pokey_state *p = (pokey_state *)_info;
 	int data = 0, pot;
 	UINT32 adjust = 0;
 
@@ -1012,10 +1007,10 @@ UINT8 pokey_r(UINT8 ChipID, offs_t offset)
 
 
 //WRITE8_DEVICE_HANDLER( pokey_w )
-void pokey_w(UINT8 ChipID, offs_t offset, UINT8 data)
+void pokey_w(void *_info, offs_t offset, UINT8 data)
 {
 	//pokey_state *p = get_safe_token(device);
-	pokey_state *p = &PokeyData[ChipID];
+	pokey_state *p = (pokey_state *)_info;
 	int ch_mask = 0, new_val;
 
 	//p->channel->update();
@@ -1240,8 +1235,8 @@ void pokey_w(UINT8 ChipID, offs_t offset, UINT8 data)
 		p->SKCTL = data;
         if( !(data & SK_RESET) )
         {
-            pokey_w(ChipID, IRQEN_C,  0);
-            pokey_w(ChipID, SKREST_C, 0);
+            pokey_w(p, IRQEN_C,  0);
+            pokey_w(p, SKREST_C, 0);
         }
         break;
     }
@@ -1452,9 +1447,9 @@ void pokey_kbcode_w(device_t *device, int kbcode, int make)
 }*/
 
 
-void pokey_set_mute_mask(UINT8 ChipID, UINT32 MuteMask)
+void pokey_set_mute_mask(void *_info, UINT32 MuteMask)
 {
-	pokey_state *chip = &PokeyData[ChipID];
+	pokey_state *chip = (pokey_state *)_info;
 	UINT8 CurChn;
 	
 	for (CurChn = 0; CurChn < 4; CurChn ++)
