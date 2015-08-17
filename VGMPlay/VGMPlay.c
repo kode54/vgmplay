@@ -62,8 +62,8 @@ INLINE UINT16 ReadLE16(const UINT8* Data);
 INLINE UINT16 ReadBE16(const UINT8* Data);
 INLINE UINT32 ReadLE24(const UINT8* Data);
 INLINE UINT32 ReadLE32(const UINT8* Data);
-INLINE int gzgetLE16(gzFile hFile, UINT16* RetValue);
-INLINE int gzgetLE32(gzFile hFile, UINT32* RetValue);
+INLINE int FILE_getLE16(VGM_FILE* hFile, UINT16* RetValue);
+INLINE int FILE_getLE32(VGM_FILE* hFile, UINT32* RetValue);
 static UINT32 gcd(UINT32 x, UINT32 y);
 //void PlayVGM(void);
 //void StopVGM(void);
@@ -78,17 +78,17 @@ static UINT32 gcd(UINT32 x, UINT32 y);
 //UINT32 GetGZFileLengthW(const wchar_t* FileName);
 static UINT32 GetGZFileLength_Internal(FILE* hFile);
 //bool OpenVGMFile(const char* FileName);
-static bool OpenVGMFile_Internal(VGM_PLAYER*, gzFile hFile, UINT32 FileSize);
-static void ReadVGMHeader(gzFile hFile, VGM_HEADER* RetVGMHead);
-static UINT8 ReadGD3Tag(gzFile hFile, UINT32 GD3Offset, GD3_TAG* RetGD3Tag);
+static bool OpenVGMFile_Internal(VGM_PLAYER*, VGM_FILE* hFile, UINT32 FileSize);
+static void ReadVGMHeader(VGM_FILE* hFile, VGM_HEADER* RetVGMHead);
+static UINT8 ReadGD3Tag(VGM_FILE* hFile, UINT32 GD3Offset, GD3_TAG* RetGD3Tag);
 static void ReadChipExtraData32(VGM_PLAYER*, UINT32 StartOffset, VGMX_CHP_EXTRA32* ChpExtra);
 static void ReadChipExtraData16(VGM_PLAYER*, UINT32 StartOffset, VGMX_CHP_EXTRA16* ChpExtra);
 //void CloseVGMFile(void);
 //void FreeGD3Tag(GD3_TAG* TagData);
 static wchar_t* MakeEmptyWStr(void);
-static wchar_t* ReadWStrFromFile(gzFile hFile, UINT32* FilePos, UINT32 EOFPos);
+static wchar_t* ReadWStrFromFile(VGM_FILE* hFile, UINT32* FilePos, UINT32 EOFPos);
 //UINT32 GetVGMFileInfo(const char* FileName, VGM_HEADER* RetVGMHead, GD3_TAG* RetGD3Tag);
-static UINT32 GetVGMFileInfo_Internal(gzFile hFile, UINT32 FileSize,
+static UINT32 GetVGMFileInfo_Internal(VGM_FILE* hFile, UINT32 FileSize,
 									  VGM_HEADER* RetVGMHead, GD3_TAG* RetGD3Tag);
 INLINE UINT32 MulDivRound(UINT64 Number, UINT64 Numerator, UINT64 Denominator);
 //UINT32 CalcSampleMSec(VGM_PLAYER* p, UINT64 Value, UINT8 Mode);
@@ -306,29 +306,29 @@ INLINE UINT32 ReadLE32(const UINT8* Data)
 #endif
 }
 
-INLINE int gzgetLE16(gzFile hFile, UINT16* RetValue)
+INLINE int FILE_getLE16(VGM_FILE* hFile, UINT16* RetValue)
 {
 #ifndef VGM_BIG_ENDIAN
-	return gzread(hFile, RetValue, 0x02);
+	return hFile->Read(hFile, RetValue, 0x02);
 #else
 	int RetVal;
 	UINT8 Data[0x02];
 
-	RetVal = gzread(hFile, Data, 0x02);
+	RetVal = hFile->Read(hFile, Data, 0x02);
 	*RetValue =	(Data[0x01] << 8) | (Data[0x00] << 0);
 	return RetVal;
 #endif
 }
 
-INLINE int gzgetLE32(gzFile hFile, UINT32* RetValue)
+INLINE int FILE_getLE32(VGM_FILE* hFile, UINT32* RetValue)
 {
 #ifndef VGM_BIG_ENDIAN
-	return gzread(hFile, RetValue, 0x04);
+	return hFile->Read(hFile, RetValue, 0x04);
 #else
 	int RetVal;
 	UINT8 Data[0x04];
 
-	RetVal = gzread(hFile, Data, 0x04);
+	RetVal = hFime->Read(hFile, Data, 0x04);
 	*RetValue =	(Data[0x03] << 24) | (Data[0x02] << 16) |
 				(Data[0x01] <<  8) | (Data[0x00] <<  0);
 	return RetVal;
@@ -630,13 +630,38 @@ static UINT32 GetGZFileLength_Internal(FILE* hFile)
 	return FileSize;
 }
 
+typedef struct vgm_file_gz
+{
+	VGM_FILE vf;
+	gzFile hFile;
+	UINT32 Size;
+} VGM_FILE_gz;
+
+static int VGMF_gzread(VGM_FILE* hFile, void* ptr, UINT32 count)
+{
+	VGM_FILE_gz* File = (VGM_FILE_gz *)hFile;
+	return gzread(File->hFile, ptr, count);
+}
+
+static int VGMF_gzseek(VGM_FILE* hFile, UINT32 offset)
+{
+	VGM_FILE_gz* File = (VGM_FILE_gz *)hFile;
+	return gzseek(File->hFile, offset, SEEK_SET);
+}
+
+static UINT32 VGMF_gzgetsize(VGM_FILE* hFile)
+{
+	VGM_FILE_gz* File = (VGM_FILE_gz *)hFile;
+	return File->Size;
+}
+
 bool OpenVGMFile(void *_p, const char* FileName)
 {
 	gzFile hFile;
 	UINT32 FileSize;
 	bool RetVal;
 
-    VGM_PLAYER* p = (VGM_PLAYER*)_p;
+  VGM_PLAYER* p = (VGM_PLAYER*)_p;
 
 	FileSize = GetGZFileLength(FileName);
 
@@ -644,7 +669,15 @@ bool OpenVGMFile(void *_p, const char* FileName)
 	if (hFile == NULL)
 		return false;
 
-	RetVal = OpenVGMFile_Internal(p, hFile, FileSize);
+	VGM_FILE_gz vgmFile;
+
+	vgmFile.vf.Read = VGMF_gzread;
+	vgmFile.vf.Seek = VGMF_gzseek;
+	vgmFile.vf.GetSize = VGMF_gzgetsize;
+	vgmFile.hFile = hFile;
+	vgmFile.Size = FileSize;
+
+	RetVal = OpenVGMFile_Internal(p, (VGM_FILE *)&vgmFile, FileSize);
 
 	gzclose(hFile);
 	return RetVal;
@@ -678,22 +711,35 @@ bool OpenVGMFileW(void *_p, const wchar_t* FileName)
 	if (hFile == NULL)
 		return false;
 #endif
+	VGM_FILE_gz vgmFile;
 
-	RetVal = OpenVGMFile_Internal(p, hFile, FileSize);
+	vgmFile.vf.Read = VGMF_gzread;
+	vgmFile.vf.Seek = VGMF_gzseek;
+	vgmFile.vf.GetSize = VGMF_gzgetsize;
+	vgmFile.hFile = hFile;
+	vgmFile.Size = FileSize;
+
+	RetVal = OpenVGMFile_Internal(p, (VGM_FILE *)&vgmFile, FileSize);
 
 	gzclose(hFile);
 	return RetVal;
 }
 #endif
 
-static bool OpenVGMFile_Internal(VGM_PLAYER* p, gzFile hFile, UINT32 FileSize)
+bool OpenVGMFile_Handle(void* _p, VGM_FILE* hFile)
+{
+	UINT32 FileSize = hFile->GetSize(hFile);
+	return OpenVGMFile_Internal((VGM_PLAYER*)_p, hFile, FileSize);
+}
+
+static bool OpenVGMFile_Internal(VGM_PLAYER* p, VGM_FILE* hFile, UINT32 FileSize)
 {
 	UINT32 fccHeader;
 	UINT32 CurPos;
 	UINT32 HdrLimit;
 
-	gzseek(hFile, 0x00, SEEK_SET);
-	gzgetLE32(hFile, &fccHeader);
+	hFile->Seek(hFile, 0x00);
+	FILE_getLE32(hFile, &fccHeader);
 	if (fccHeader != FCC_VGM)
 		return false;
 
@@ -703,7 +749,7 @@ static bool OpenVGMFile_Internal(VGM_PLAYER* p, gzFile hFile, UINT32 FileSize)
 	p->FileMode = 0x00;
 	p->VGMDataLen = FileSize;
 
-	gzseek(hFile, 0x00, SEEK_SET);
+	hFile->Seek(hFile, 0x00);
 	ReadVGMHeader(hFile, &p->VGMHead);
 
 	p->VGMSampleRate = 44100;
@@ -731,8 +777,8 @@ static bool OpenVGMFile_Internal(VGM_PLAYER* p, gzFile hFile, UINT32 FileSize)
 	p->VGMData = (UINT8*)malloc(p->VGMDataLen);
 	if (p->VGMData == NULL)
 		return false;
-	gzseek(hFile, 0x00, SEEK_SET);
-	gzread(hFile, p->VGMData, p->VGMDataLen);
+	hFile->Seek(hFile, 0x00);
+	hFile->Read(hFile, p->VGMData, p->VGMDataLen);
 
 	// Read Extra Header Data
 	if (p->VGMHead.lngExtraOffset)
@@ -787,13 +833,13 @@ static bool OpenVGMFile_Internal(VGM_PLAYER* p, gzFile hFile, UINT32 FileSize)
 	return true;
 }
 
-static void ReadVGMHeader(gzFile hFile, VGM_HEADER* RetVGMHead)
+static void ReadVGMHeader(VGM_FILE* hFile, VGM_HEADER* RetVGMHead)
 {
 	VGM_HEADER CurHead;
 	UINT32 CurPos;
 	UINT32 HdrLimit;
 
-	gzread(hFile, &CurHead, sizeof(VGM_HEADER));
+	hFile->Read(hFile, &CurHead, sizeof(VGM_HEADER));
 #ifdef VGM_BIG_ENDIAN
 	{
 		UINT8* TempPtr;
@@ -910,7 +956,7 @@ static void ReadVGMHeader(gzFile hFile, VGM_HEADER* RetVGMHead)
 	return;
 }
 
-static UINT8 ReadGD3Tag(gzFile hFile, UINT32 GD3Offset, GD3_TAG* RetGD3Tag)
+static UINT8 ReadGD3Tag(VGM_FILE* hFile, UINT32 GD3Offset, GD3_TAG* RetGD3Tag)
 {
 	UINT32 CurPos;
 	UINT32 TempLng;
@@ -921,8 +967,8 @@ static UINT8 ReadGD3Tag(gzFile hFile, UINT32 GD3Offset, GD3_TAG* RetGD3Tag)
 	// Read GD3 Tag
 	if (GD3Offset)
 	{
-		gzseek(hFile, GD3Offset, SEEK_SET);
-		gzgetLE32(hFile, &TempLng);
+		hFile->Seek(hFile, GD3Offset);
+		FILE_getLE32(hFile, &TempLng);
 		if (TempLng != FCC_GD3)
 		{
 			GD3Offset = 0x00000000;
@@ -953,13 +999,13 @@ static UINT8 ReadGD3Tag(gzFile hFile, UINT32 GD3Offset, GD3_TAG* RetGD3Tag)
 	else
 	{
 		//CurPos = GD3Offset;
-		//gzseek(hFile, CurPos, SEEK_SET);
-		//CurPos += gzgetLE32(hFile, &RetGD3Tag->fccGD3);
+		//hFile->Seek(hFile, CurPos, SEEK_SET);
+		//CurPos += FILE_getLE32(hFile, &RetGD3Tag->fccGD3);
 
 		CurPos = GD3Offset + 0x04;		// Save some back seeking, yay!
 		RetGD3Tag->fccGD3 = TempLng;	// (That costs lots of CPU in .gz files.)
-		CurPos += gzgetLE32(hFile, &RetGD3Tag->lngVersion);
-		CurPos += gzgetLE32(hFile, &RetGD3Tag->lngTagLength);
+		CurPos += FILE_getLE32(hFile, &RetGD3Tag->lngVersion);
+		CurPos += FILE_getLE32(hFile, &RetGD3Tag->lngTagLength);
 
 		TempLng = CurPos + RetGD3Tag->lngTagLength;
 		RetGD3Tag->strTrackNameE =	ReadWStrFromFile(hFile, &CurPos, TempLng);
@@ -1096,7 +1142,7 @@ static wchar_t* MakeEmptyWStr(void)
 	return Str;
 }
 
-static wchar_t* ReadWStrFromFile(gzFile hFile, UINT32* FilePos, UINT32 EOFPos)
+static wchar_t* ReadWStrFromFile(VGM_FILE* hFile, UINT32* FilePos, UINT32 EOFPos)
 {
 	// Note: Works with Windows (16-bit wchar_t) as well as Linux (32-bit wchar_t)
 	UINT32 CurPos;
@@ -1112,13 +1158,13 @@ static wchar_t* ReadWStrFromFile(gzFile hFile, UINT32* FilePos, UINT32 EOFPos)
 	if (TextStr == NULL)
 		return NULL;
 
-	gzseek(hFile, CurPos, SEEK_SET);
+	hFile->Seek(hFile, CurPos);
 	TempStr = TextStr - 1;
 	StrLen = 0x00;
 	do
 	{
 		TempStr ++;
-		gzgetLE16(hFile, &UnicodeChr);
+		FILE_getLE16(hFile, &UnicodeChr);
 		*TempStr = (wchar_t)UnicodeChr;
 		CurPos += 0x02;
 		StrLen ++;
@@ -1147,7 +1193,15 @@ UINT32 GetVGMFileInfo(const char* FileName, VGM_HEADER* RetVGMHead, GD3_TAG* Ret
 	if (hFile == NULL)
 		return 0x00;
 
-	RetVal = GetVGMFileInfo_Internal(hFile, FileSize, RetVGMHead, RetGD3Tag);
+	VGM_FILE_gz vgmFile;
+
+	vgmFile.vf.Read = VGMF_gzread;
+	vgmFile.vf.Seek = VGMF_gzseek;
+	vgmFile.vf.GetSize = VGMF_gzgetsize;
+	vgmFile.hFile = hFile;
+	vgmFile.Size = FileSize;
+
+	RetVal = GetVGMFileInfo_Internal((VGM_FILE *)&vgmFile, FileSize, RetVGMHead, RetGD3Tag);
 
 	gzclose(hFile);
 	return RetVal;
@@ -1179,14 +1233,28 @@ UINT32 GetVGMFileInfoW(const wchar_t* FileName, VGM_HEADER* RetVGMHead, GD3_TAG*
 		return 0x00;
 #endif
 
-	RetVal = GetVGMFileInfo_Internal(hFile, FileSize, RetVGMHead, RetGD3Tag);
+	VGM_FILE_gz vgmFile;
+
+	vgmFile.vf.Read = VGMF_gzread;
+	vgmFile.vf.Seek = VGMF_gzseek;
+	vgmFile.vf.GetSize = VGMF_gzgetsize;
+	vgmFile.hFile = hFile;
+	vgmFile.Size = FileSize;
+
+	RetVal = GetVGMFileInfo_Internal((VGM_FILE *)&vgmFile, FileSize, RetVGMHead, RetGD3Tag);
 
 	gzclose(hFile);
 	return RetVal;
 }
 #endif
 
-static UINT32 GetVGMFileInfo_Internal(gzFile hFile, UINT32 FileSize,
+UINT32 GetVGMFileInfo_Handle(VGM_FILE* hFile, VGM_HEADER* RetVGMHead, GD3_TAG* RetGD3Tag)
+{
+	UINT32 FileSize = hFile->GetSize(hFile);
+	return GetVGMFileInfo_Internal(hFile, FileSize, RetVGMHead, RetGD3Tag);
+}
+
+static UINT32 GetVGMFileInfo_Internal(VGM_FILE* hFile, UINT32 FileSize,
 									  VGM_HEADER* RetVGMHead, GD3_TAG* RetGD3Tag)
 {
 	// this is a copy-and-paste from OpenVGM, just a little stripped
@@ -1194,15 +1262,15 @@ static UINT32 GetVGMFileInfo_Internal(gzFile hFile, UINT32 FileSize,
 	UINT32 TempLng;
 	VGM_HEADER TempHead;
 
-	gzseek(hFile, 0x00, SEEK_SET);
-	gzgetLE32(hFile, &fccHeader);
+	hFile->Seek(hFile, 0x00);
+	FILE_getLE32(hFile, &fccHeader);
 	if (fccHeader != FCC_VGM)
 		return 0x00;
 
 	if (RetVGMHead == NULL && RetGD3Tag == NULL)
 		return FileSize;
 
-	gzseek(hFile, 0x00, SEEK_SET);
+	hFile->Seek(hFile, 0x00);
 	ReadVGMHeader(hFile, &TempHead);
 
 	if (! TempHead.lngEOFOffset || TempHead.lngEOFOffset > FileSize)

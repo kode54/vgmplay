@@ -19,18 +19,27 @@ typedef struct waveform_32bit_stereo
 	INT32 Right;
 } WAVE_32BS;
 
+typedef struct vgm_file VGM_FILE;
+struct vgm_file
+{
+  int (*Read)(VGM_FILE*, void*, UINT32);
+	int (*Seek)(VGM_FILE*, UINT32);
+	UINT32 (*GetSize)(VGM_FILE*);
+};
 
 void * VGMPlay_Init(void);
 void VGMPlay_Init2(void* vgmp);
 void VGMPlay_Deinit(void* vgmp);
-char* FindFile(const char* FileName);
 
 UINT32 GetGZFileLength(const char* FileName);
+
 bool OpenVGMFile(void* vgmp, const char* FileName);
+bool OpenVGMFile_Handle(void* vgmp, VGM_FILE*);
 void CloseVGMFile(void* vgmp);
 
 void FreeGD3Tag(GD3_TAG* TagData);
 UINT32 GetVGMFileInfo(const char* FileName, VGM_HEADER* RetVGMHead, GD3_TAG* RetGD3Tag);
+UINT32 GetVGMFileInfo_Handle(VGM_FILE*, VGM_HEADER* RetVGMHead, GD3_TAG* RetGD3Tag);
 UINT32 CalcSampleMSec(void* vgmp, UINT64 Value, UINT8 Mode);
 UINT32 CalcSampleMSecExt(void* vgmp, UINT64 Value, UINT8 Mode, VGM_HEADER* FileHead);
 const char* GetChipName(UINT8 ChipID);
