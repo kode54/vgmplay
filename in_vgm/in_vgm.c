@@ -102,12 +102,15 @@ DWORD WINAPI DecodeThread(LPVOID b);
 // the output module
 static In_Module WmpMod;
 
+// the VGM state
+void* vgmp;
+
 // currently playing file (used for getting info on the current file)
 static in_char CurFileName[PATH_SIZE];
 
 static int decode_pos;				// current decoding position (depends on SampleRate)
 static int decode_pos_ms;			// Used for correcting DSP plug-in pitch changes
-static volatile int seek_needed;	// if != -1, it is the point that the decode 
+static volatile int seek_needed;	// if != -1, it is the point that the decode
 									// thread should seek to, in ms.
 
 static volatile bool killDecodeThread = 0;			// the kill switch for the decode thread
@@ -119,6 +122,7 @@ PLGIN_OPTS Options;
 
 
 
+#if 0
 extern UINT32 SampleRate;
 extern UINT32 VGMMaxLoop;
 extern UINT32 VGMPbRate;
@@ -148,19 +152,19 @@ extern UINT32 VGMMaxLoopM;
 extern bool VGMEnd;
 extern bool PausePlay;
 extern bool EndPlay;
-
+#endif
 
 
 HANDLE hPluginInst;
 
 
-// avoid CRT. Evil. Big. Bloated. Only uncomment this code if you are using 
+// avoid CRT. Evil. Big. Bloated. Only uncomment this code if you are using
 // 'ignore default libraries' in VC++. Keeps DLL size way down.
 // /*
 BOOL WINAPI _DllMainCRTStartup(HANDLE hInst, ULONG ul_reason_for_call, LPVOID lpReserved)
 {
 	hPluginInst = hInst;	// save for InitConfigDialog
-	
+
 	return TRUE;
 }
 // */
@@ -169,7 +173,7 @@ void Config(HWND hWndParent)
 {
 	// if we had a configuration box we'd want to write it here (using DialogBox, etc)
 	DialogBox(WmpMod.hDllInstance, (LPTSTR)DlgConfigMain, hWndParent, &ConfigDialogProc);
-	
+
 	return;
 }
 
@@ -213,7 +217,7 @@ void About(HWND hWndParent)
 	char* FinalMsg;
 	char* TempPnt;
 	UINT8 CurChip;
-	
+
 	// generate Chip list
 	ChipList = (char*)malloc(CHIP_COUNT * 12);
 	TempPnt = ChipList;
@@ -224,7 +228,7 @@ void About(HWND hWndParent)
 			// replace space with new-line every 6 chips
 			*(TempPnt - 1) = '\n';
 		}
-		
+
 		ChipStr = GetAccurateChipName(CurChip, 0xFF);
 		strcpy(TempPnt, ChipStr);
 		TempPnt += strlen(TempPnt);
@@ -233,47 +237,42 @@ void About(HWND hWndParent)
 	}
 	TempPnt -= 2;
 	*TempPnt = '\0';
-	
+
 	FinalMsg = (char*)malloc(strlen(MsgStr) + 0x10 + strlen(ChipList));
 	sprintf(FinalMsg, MsgStr, CHIP_COUNT, ChipList);
 	free(ChipList);
-	
+
 	MessageBox(hWndParent, FinalMsg, WmpMod.description, MB_ICONINFORMATION | MB_OK);
-	
+
 	free(FinalMsg);
-	
+
 	return;
 }
 
 void Init(void)
 {
 	char* FileTitle;
-	
+
 	setlocale(LC_CTYPE, "");
-	
+
 	// any one-time initialization goes here (configuration reading, etc)
-	VGMPlay_Init();	// General Init
-	
+	vgmp = VGMPlay_Init();	// General Init
+
 	GetModuleFileName(hPluginInst, AppPathBuffer, PATH_SIZE);	// get path of in_vgm.dll
 	GetFullPathName(AppPathBuffer, PATH_SIZE, AppPathBuffer, &FileTitle);  // find file title
 	*FileTitle = '\0';
-	
-	// Path 1: dll's directory
-	AppPaths[0x00] = AppPathBuffer;
-	// Path 2: working directory ("\0")
-	AppPaths[0x01] = AppPathBuffer + strlen(AppPathBuffer);
-	
+
 	LoadConfigurationFile();
-	
-	VGMPlay_Init2();	// Post-Config-Load Init
-	
+
+	VGMPlay_Init2(vgmp);	// Post-Config-Load Init
+
 	return;
 }
 
 void FindIniFile(void)
 {
 	const char* WAIniDir;
-	
+
 	// get directory for Winamp INI files
 	WAIniDir = (char *)SendMessage(WmpMod.hMainWindow, WM_WA_IPC, 0, IPC_GETINIDIRECTORY);
 	if (WAIniDir == NULL)
@@ -286,13 +285,13 @@ void FindIniFile(void)
 		// Winamp 5.11+ (with user profiles)
 		strcpy(IniFilePath, WAIniDir);
 		strcat(IniFilePath,"\\Plugins");
-		
+
 		// make sure folder exists
 		CreateDirectory(IniFilePath, NULL);
 		strcat(IniFilePath, "\\");
 	}
 	strcat(IniFilePath, "in_vgm.ini");
-	
+
 	return;
 }
 
@@ -304,15 +303,14 @@ void LoadConfigurationFile(void)
 	CHIP_OPTS* TempCOpt;
 	char TempStr[0x20];
 	const char* ChipName;
-	
+	VGM_PLAYER* p = (VGM_PLAYER*) vgmp;
+
 	// -- set default values --
 	// VGMPlay_Init() already sets most default values
 	Options.ImmediateUpdate = false;
-	
+
 	Options.SampleRate = 44100;
-	Options.PauseNL = PauseTime;
-	Options.PauseLp = PauseTime;
-	
+
 	strcpy(Options.TitleFormat, "%t (%g) - %a");
 	Options.JapTags = false;
 	Options.AppendFM2413 = false;
@@ -320,30 +318,30 @@ void LoadConfigurationFile(void)
 	Options.StdSeparators = true;
 	Options.TagFallback = false;
 	Options.MLFileType = 0;
-	
+
 	Options.Enable7z = false;
-	
+
 	Options.ResetMuting = true;
 	DoubleSSGVol = true;
-	
+
 	FindIniFile();
-	
+
 	// Read actual options
 	ReadIni_Boolean ("General",		"ImmdtUpdate",	&Options.ImmediateUpdate);
-	
+
 	ReadIni_Integer	("Playback",	"SampleRate",	&Options.SampleRate);
-	ReadIni_Integer	("Playback",	"FadeTime",		&FadeTime);
+	ReadIni_Integer	("Playback",	"FadeTime",		&p->FadeTime);
 	ReadIni_Integer	("Playback",	"PauseNoLoop",	&Options.PauseNL);
 	ReadIni_Integer	("Playback",	"PauseLoop",	&Options.PauseLp);
-	ReadIni_Float	("Playback",	"Volume",		&VolumeLevel);
-	ReadIni_Integer	("Playback",	"MaxLoops",		&VGMMaxLoop);
-	ReadIni_Integer	("Playback",	"PlaybackRate",	&VGMPbRate);
-	ReadIni_Boolean	("Playback",	"DoubleSSGVol",	&DoubleSSGVol);
-	ReadIni_IntByte	("Playback",	"ResamplMode",	&ResampleMode);
+	ReadIni_Float	("Playback",	"Volume",		&p->VolumeLevel);
+	ReadIni_Integer	("Playback",	"MaxLoops",		&p->VGMMaxLoop);
+	ReadIni_Integer	("Playback",	"PlaybackRate",	&p->VGMPbRate);
+	ReadIni_Boolean	("Playback",	"DoubleSSGVol",	&p->DoubleSSGVol);
+	ReadIni_IntByte	("Playback",	"ResamplMode",	&p->ResampleMode);
 	ReadIni_Integer	("Playback",	"ChipSmplRate",	&Options.ChipRate);
-	ReadIni_IntByte	("Playback",	"ChipSmplMode",	&CHIP_SAMPLING_MODE);
-	ReadIni_Boolean	("Playback",	"SurroundSnd",	&SurroundSound);
-	
+	ReadIni_IntByte	("Playback",	"ChipSmplMode",	&p->CHIP_SAMPLING_MODE);
+	ReadIni_Boolean	("Playback",	"SurroundSnd",	&p->SurroundSound);
+
 	ReadIni_String	("Tags",		"TitleFormat",	 Options.TitleFormat, 0x80);
 	ReadIni_Boolean	("Tags",		"UseJapTags",	&Options.JapTags);
 	ReadIni_Boolean	("Tags",		"AppendFM2413",	&Options.AppendFM2413);
@@ -351,35 +349,35 @@ void LoadConfigurationFile(void)
 	ReadIni_Boolean	("Tags",		"SeparatorStd",	&Options.StdSeparators);
 	ReadIni_Boolean	("Tags",		"TagFallback",	&Options.TagFallback);
 	ReadIni_Integer	("Tags",		"MLFileType",	&Options.MLFileType);
-	
+
 	//ReadIni_Boolean	("Vgm7z",		"Enable",		&Options.Enable7z);
-	
+
 	ReadIni_Boolean ("Muting",		"Reset",		&Options.ResetMuting);
-	
-	TempCOpt = (CHIP_OPTS*)&ChipOpts[0x00];
+
+	TempCOpt = (CHIP_OPTS*)&p->ChipOpts[0x00];
 	for (CurChip = 0x00; CurChip < CHIP_COUNT; CurChip ++, TempCOpt ++)
 	{
 		ReadIni_IntByte("EmuCore",	GetChipName(CurChip),	&TempCOpt->EmuCore);
 	}
-	
+
 	for (CurCSet = 0x00; CurCSet < 0x02; CurCSet ++)
 	{
-		TempCOpt = (CHIP_OPTS*)&ChipOpts[CurCSet];
-		
+		TempCOpt = (CHIP_OPTS*)&p->ChipOpts[CurCSet];
+
 		for (CurChip = 0x00; CurChip < CHIP_COUNT; CurChip ++, TempCOpt ++)
 		{
 			ChipName = GetChipName(CurChip);
-			
+
 			sprintf(TempStr, "%s #%u All", ChipName, CurCSet);
 			ReadIni_Boolean("Muting",	TempStr,	&TempCOpt->Disabled);
-			
+
 			sprintf(TempStr, "%s #%u", ChipName, CurCSet);
 			ReadIni_Integer("Muting",	TempStr,	&TempCOpt->ChnMute1);
 			sprintf(TempStr, "%s #%u_%u", ChipName, CurCSet, 2);
 			ReadIni_Integer("Muting",	TempStr,	&TempCOpt->ChnMute2);
 			sprintf(TempStr, "%s #%u_%u", ChipName, CurCSet, 3);
 			ReadIni_Integer("Muting",	TempStr,	&TempCOpt->ChnMute3);
-			
+
 			for (CurChn = 0x00; CurChn < TempCOpt->ChnCnt; CurChn ++)
 			{
 				if (TempCOpt->ChnCnt > 10)
@@ -388,75 +386,75 @@ void LoadConfigurationFile(void)
 					sprintf(TempStr, "%s #%u %u", ChipName, CurCSet, CurChn);
 				ReadIni_SIntSht("Panning",	TempStr,	&TempCOpt->Panning[CurChn]);
 			}
-			
+
 		}
 	}
-	
+
 	// Additional options
 	// YM2612
-	ChipName = GetChipName(0x02);	TempCOpt = &ChipOpts[0x00].YM2612;
+	ChipName = GetChipName(0x02);	TempCOpt = &p->ChipOpts[0x00].YM2612;
 	sprintf(TempStr, "%s Gens DACHighpass", ChipName);
 	ReadIntoBitfield2("ChipOpts", TempStr, &TempCOpt->SpecialFlags, 0, 1);
-	
+
 	sprintf(TempStr, "%s Gens SSG-EG", ChipName);
 	ReadIntoBitfield2("ChipOpts", TempStr, &TempCOpt->SpecialFlags, 1, 1);
-	
+
 	sprintf(TempStr, "%s PseudoStereo", ChipName);
 	ReadIntoBitfield2("ChipOpts", TempStr, &TempCOpt->SpecialFlags, 2, 1);
-	
+
 	// YM2203
-	ChipName = GetChipName(0x06);	TempCOpt = &ChipOpts[0x00].YM2203;
+	ChipName = GetChipName(0x06);	TempCOpt = &p->ChipOpts[0x00].YM2203;
 	sprintf(TempStr, "%s Disable AY", ChipName);
 	ReadIntoBitfield2("ChipOpts", TempStr, &TempCOpt->SpecialFlags, 0, 1);
-	
+
 	// YM2608
-	ChipName = GetChipName(0x07);	TempCOpt = &ChipOpts[0x00].YM2608;
+	ChipName = GetChipName(0x07);	TempCOpt = &p->ChipOpts[0x00].YM2608;
 	sprintf(TempStr, "%s Disable AY", ChipName);
 	ReadIntoBitfield2("ChipOpts", TempStr, &TempCOpt->SpecialFlags, 0, 1);
-	
+
 	// YM2610
-	ChipName = GetChipName(0x08);	TempCOpt = &ChipOpts[0x00].YM2610;
+	ChipName = GetChipName(0x08);	TempCOpt = &p->ChipOpts[0x00].YM2610;
 	sprintf(TempStr, "%s Disable AY", ChipName);
 	ReadIntoBitfield2("ChipOpts", TempStr, &TempCOpt->SpecialFlags, 0, 1);
-	
+
 	// GameBoy
-	ChipName = GetChipName(0x13);	TempCOpt = &ChipOpts[0x00].GameBoy;
+	ChipName = GetChipName(0x13);	TempCOpt = &p->ChipOpts[0x00].GameBoy;
 	sprintf(TempStr, "%s Boost WaveCh", ChipName);
 	ReadIntoBitfield2("ChipOpts", TempStr, &TempCOpt->SpecialFlags, 0, 1);
-	
+
 	sprintf(TempStr, "%s Reduce NoiseCh", ChipName);
 	ReadIntoBitfield2("ChipOpts", TempStr, &TempCOpt->SpecialFlags, 1, 1);
-	
+
 	sprintf(TempStr, "%s Inaccurate", ChipName);
 	ReadIntoBitfield2("ChipOpts", TempStr, &TempCOpt->SpecialFlags, 2, 1);
-	
+
 	// NES
-	ChipName = GetChipName(0x14);	TempCOpt = &ChipOpts[0x00].NES;
+	ChipName = GetChipName(0x14);	TempCOpt = &p->ChipOpts[0x00].NES;
 	sprintf(TempStr, "%s Shared Opts", ChipName);
 	ReadIntoBitfield2("ChipOpts", TempStr, &TempCOpt->SpecialFlags, 0, 2);
-	
+
 	sprintf(TempStr, "%s APU Opts", ChipName);
 	ReadIntoBitfield2("ChipOpts", TempStr, &TempCOpt->SpecialFlags, 2, 2);
-	
+
 	sprintf(TempStr, "%s DMC Opts", ChipName);
 	ReadIntoBitfield2("ChipOpts", TempStr, &TempCOpt->SpecialFlags, 4, 8);
-	
+
 	sprintf(TempStr, "%s FDS Opts", ChipName);
 	ReadIntoBitfield2("ChipOpts", TempStr, &TempCOpt->SpecialFlags, 12, 1);
-	
+
 	// OKIM6258
-	ChipName = GetChipName(0x20);	TempCOpt = &ChipOpts[0x00].OKIM6258;
+	ChipName = GetChipName(0x20);	TempCOpt = &p->ChipOpts[0x00].OKIM6258;
 	sprintf(TempStr, "%s Internal 10bit", ChipName);
 	ReadIntoBitfield2("ChipOpts", TempStr, &TempCOpt->SpecialFlags, 0, 1);
-	
+
 	sprintf(TempStr, "%s Remove DC Ofs", ChipName);
 	ReadIntoBitfield2("ChipOpts", TempStr, &TempCOpt->SpecialFlags, 1, 1);
-	
+
 	// SCSP
-	ChipName = GetChipName(0x20);	TempCOpt = &ChipOpts[0x00].SCSP;
+	ChipName = GetChipName(0x20);	TempCOpt = &p->ChipOpts[0x00].SCSP;
 	sprintf(TempStr, "%s Bypass DSP", ChipName);
 	ReadIntoBitfield2("ChipOpts", TempStr, &TempCOpt->SpecialFlags, 0, 1);
-	
+
 	return;
 }
 
@@ -466,18 +464,18 @@ static void ReadIntoBitfield2(const char* Section, const char* Key, UINT16* Valu
 	// Bitfield Read routine (2-byte/16-bit data)
 	UINT16 BitMask;
 	UINT16 NewBits;
-	
+
 	if (! BitCount)
 		return;
-	
+
 	BitMask = (1 << BitCount) - 1;
-	
+
 	NewBits = *Value >> BitStart;	// read old bits, making them the default data
 	ReadIni_SIntSht(Section, Key, &NewBits);	// read .ini
-	
+
 	*Value &= ~(BitMask << BitStart);			// clear bit range
 	*Value |= (NewBits & BitMask) << BitStart;	// add new bits in
-	
+
 	return;
 }
 
@@ -489,22 +487,23 @@ void SaveConfigurationFile(void)
 	CHIP_OPTS* TempCOpt;
 	char TempStr[0x20];
 	const char* ChipName;
-	
+	VGM_PLAYER* p = (VGM_PLAYER*)vgmp;
+
 	WriteIni_Boolean("General",		"ImmdtUpdate",	Options.ImmediateUpdate);
-	
+
 	WriteIni_Integer("Playback",	"SampleRate",	Options.SampleRate);
 	WriteIni_Integer("Playback",	"FadeTime",		FadeTime);
 	WriteIni_Integer("Playback",	"PauseNoLoop",	Options.PauseNL);
 	WriteIni_Integer("Playback",	"PauseLoop",	Options.PauseLp);
-	WriteIni_Float	("Playback",	"Volume",		VolumeLevel);
-	WriteIni_Integer("Playback",	"MaxLoops",		VGMMaxLoop);
-	WriteIni_Integer("Playback",	"PlaybackRate",	VGMPbRate);
-	WriteIni_Boolean("Playback",	"DoubleSSGVol",	DoubleSSGVol);
-	WriteIni_Integer("Playback",	"ResamplMode",	ResampleMode);
+	WriteIni_Float	("Playback",	"Volume",		p->VolumeLevel);
+	WriteIni_Integer("Playback",	"MaxLoops",		p->VGMMaxLoop);
+	WriteIni_Integer("Playback",	"PlaybackRate",	p->VGMPbRate);
+	WriteIni_Boolean("Playback",	"DoubleSSGVol",	p->DoubleSSGVol);
+	WriteIni_Integer("Playback",	"ResamplMode",	p->ResampleMode);
 	WriteIni_Integer("Playback",	"ChipSmplRate",	Options.ChipRate);
-	WriteIni_Integer("Playback",	"ChipSmplMode",	CHIP_SAMPLING_MODE);
-	WriteIni_Boolean("Playback",	"SurroundSnd",	SurroundSound);
-	
+	WriteIni_Integer("Playback",	"ChipSmplMode",	p->CHIP_SAMPLING_MODE);
+	WriteIni_Boolean("Playback",	"SurroundSnd",	p->SurroundSound);
+
 	WriteIni_String	("Tags",		"TitleFormat",	Options.TitleFormat);
 	WriteIni_Boolean("Tags",		"UseJapTags",	Options.JapTags);
 	WriteIni_Boolean("Tags",		"AppendFM2413",	Options.AppendFM2413);
@@ -512,28 +511,28 @@ void SaveConfigurationFile(void)
 	WriteIni_Boolean("Tags",		"SeparatorStd",	Options.StdSeparators);
 	WriteIni_Boolean("Tags",		"TagFallback",	Options.TagFallback);
 	WriteIni_XInteger("Tags",		"MLFileType",	Options.MLFileType);
-	
+
 	//WriteIni_Boolean("Vgm7z",		"Enable",		Options.Enable7z);
-	
-	TempCOpt = (CHIP_OPTS*)&ChipOpts[0x00];
+
+	TempCOpt = (CHIP_OPTS*)&p->ChipOpts[0x00];
 	for (CurChip = 0x00; CurChip < CHIP_COUNT; CurChip ++, TempCOpt ++)
 	{
 		ChipName = GetChipName(CurChip);
 		WriteIni_Integer("EmuCore",	ChipName,		TempCOpt->EmuCore);
 	}
-			
+
 	WriteIni_Boolean("Muting",		"Reset",		Options.ResetMuting);
-	
+
 	for (CurCSet = 0x00; CurCSet < 0x02; CurCSet ++)
 	{
-		TempCOpt = (CHIP_OPTS*)&ChipOpts[CurCSet];
-		
+		TempCOpt = (CHIP_OPTS*)&p->ChipOpts[CurCSet];
+
 		for (CurChip = 0x00; CurChip < CHIP_COUNT; CurChip ++, TempCOpt ++)
 		{
 			ChipName = GetChipName(CurChip);
 			sprintf(TempStr, "%s #%u All", ChipName, CurCSet, 1);
 			WriteIni_Boolean("Muting",	TempStr,	TempCOpt->Disabled);
-			
+
 			sprintf(TempStr, "%s #%u", ChipName, CurCSet, 1);
 			WriteIni_XInteger("Muting",	TempStr,	TempCOpt->ChnMute1);
 			if (CurChip == 0x07 || CurChip == 0x08 || CurChip == 0x0D)
@@ -548,7 +547,7 @@ void SaveConfigurationFile(void)
 				sprintf(TempStr, "%s #%u_%u", ChipName, CurCSet, 3);
 				WriteIni_XInteger("Muting",	TempStr,	TempCOpt->ChnMute3);
 			}
-			
+
 			for (CurChn = 0x00; CurChn < TempCOpt->ChnCnt; CurChn ++)
 			{
 				if (TempCOpt->ChnCnt > 10)
@@ -559,73 +558,73 @@ void SaveConfigurationFile(void)
 			}
 		}
 	}
-	
+
 	// Additional options
 	// YM2612
-	ChipName = GetChipName(0x02);	TempCOpt = &ChipOpts[0x00].YM2612;
+	ChipName = GetChipName(0x02);	TempCOpt = &p->ChipOpts[0x00].YM2612;
 	sprintf(TempStr, "%s Gens DACHighpass", ChipName);
 	WriteFromBitfield("ChipOpts", TempStr, TempCOpt->SpecialFlags, 0, 1);
-	
+
 	sprintf(TempStr, "%s Gens SSG-EG", ChipName);
 	WriteFromBitfield("ChipOpts", TempStr, TempCOpt->SpecialFlags, 1, 1);
-	
+
 	sprintf(TempStr, "%s PseudoStereo", ChipName);
 	WriteFromBitfield("ChipOpts", TempStr, TempCOpt->SpecialFlags, 2, 1);
-	
+
 	// YM2203
-	ChipName = GetChipName(0x06);	TempCOpt = &ChipOpts[0x00].YM2203;
+	ChipName = GetChipName(0x06);	TempCOpt = &p->ChipOpts[0x00].YM2203;
 	sprintf(TempStr, "%s Disable AY", ChipName);
 	WriteFromBitfield("ChipOpts", TempStr, TempCOpt->SpecialFlags, 0, 1);
-	
+
 	// YM2608
-	ChipName = GetChipName(0x07);	TempCOpt = &ChipOpts[0x00].YM2608;
+	ChipName = GetChipName(0x07);	TempCOpt = &p->ChipOpts[0x00].YM2608;
 	sprintf(TempStr, "%s Disable AY", ChipName);
 	WriteFromBitfield("ChipOpts", TempStr, TempCOpt->SpecialFlags, 0, 1);
-	
+
 	// YM2610
-	ChipName = GetChipName(0x08);	TempCOpt = &ChipOpts[0x00].YM2610;
+	ChipName = GetChipName(0x08);	TempCOpt = &p->ChipOpts[0x00].YM2610;
 	sprintf(TempStr, "%s Disable AY", ChipName);
 	WriteFromBitfield("ChipOpts", TempStr, TempCOpt->SpecialFlags, 0, 1);
-	
+
 	// GameBoy
-	ChipName = GetChipName(0x13);	TempCOpt = &ChipOpts[0x00].GameBoy;
+	ChipName = GetChipName(0x13);	TempCOpt = &p->ChipOpts[0x00].GameBoy;
 	sprintf(TempStr, "%s Boost WaveCh", ChipName);
 	WriteFromBitfield("ChipOpts", TempStr, TempCOpt->SpecialFlags, 0, 1);
-	
+
 	sprintf(TempStr, "%s Reduce NoiseCh", ChipName);
 	WriteFromBitfield("ChipOpts", TempStr, TempCOpt->SpecialFlags, 1, 1);
-	
+
 	sprintf(TempStr, "%s Inaccurate", ChipName);
 	WriteFromBitfield("ChipOpts", TempStr, TempCOpt->SpecialFlags, 2, 1);
-	
+
 	// NES
-	ChipName = GetChipName(0x14);	TempCOpt = &ChipOpts[0x00].NES;
+	ChipName = GetChipName(0x14);	TempCOpt = &p->ChipOpts[0x00].NES;
 	sprintf(TempStr, "%s Shared Opts", ChipName);
 	WriteFromBitfield("ChipOpts", TempStr, TempCOpt->SpecialFlags, 0, 2);
-	
+
 	sprintf(TempStr, "%s APU Opts", ChipName);
 	WriteFromBitfield("ChipOpts", TempStr, TempCOpt->SpecialFlags, 2, 2);
-	
+
 	sprintf(TempStr, "%s DMC Opts", ChipName);
 	WriteFromBitfield("ChipOpts", TempStr, TempCOpt->SpecialFlags, 4, 8);
-	
+
 	sprintf(TempStr, "%s FDS Opts", ChipName);
 	WriteFromBitfield("ChipOpts", TempStr, TempCOpt->SpecialFlags, 12, 1);
-	
+
 	// OKIM6258
-	ChipName = GetChipName(0x20);	TempCOpt = &ChipOpts[0x00].OKIM6258;
+	ChipName = GetChipName(0x20);	TempCOpt = &p->ChipOpts[0x00].OKIM6258;
 	sprintf(TempStr, "%s Internal 10bit", ChipName);
 	WriteFromBitfield("ChipOpts", TempStr, TempCOpt->SpecialFlags, 0, 1);
-	
+
 	sprintf(TempStr, "%s Remove DC Ofs", ChipName);
 	WriteFromBitfield("ChipOpts", TempStr, TempCOpt->SpecialFlags, 1, 1);
-	
+
 	// SCSP
-	ChipName = GetChipName(0x20);	TempCOpt = &ChipOpts[0x00].SCSP;
+	ChipName = GetChipName(0x20);	TempCOpt = &p->ChipOpts[0x00].SCSP;
 	sprintf(TempStr, "%s Bypass DSP", ChipName);
 	TempCOpt->SpecialFlags |= 0x01;	// force SCSP DSP bypass upon next loading
 	WriteFromBitfield("ChipOpts", TempStr, TempCOpt->SpecialFlags, 0, 1);
-	
+
 	return;
 }
 
@@ -634,16 +633,16 @@ static void WriteFromBitfield(const char* Section, const char* Key, UINT32 Value
 {
 	UINT32 BitMask;
 	UINT32 WrtBits;
-	
+
 	if (! BitCount)
 		return;
-	
+
 	BitMask = (1 << BitCount) - 1;
-	
+
 	WrtBits = Value >> BitStart;
 	WrtBits &= BitMask;
 	WriteIni_XInteger(Section, Key, WrtBits);
-	
+
 	return;
 }
 
@@ -651,9 +650,10 @@ void Deinit(void)
 {
 	// one-time deinit, such as memory freeing
 	SaveConfigurationFile();
-	
-	VGMPlay_Deinit();
-	
+
+	VGMPlay_Deinit(vgmp);
+	vgmp = NULL;
+
 	return;
 }
 
@@ -662,7 +662,7 @@ int IsOurFile(const in_char* fn)
 	// used for detecting URL streams - currently unused.
 	// return ! strncmp(fn,"http://",7); to detect HTTP streams, etc
 	return 0;
-} 
+}
 
 
 INLINE UINT32 MulDivRound(UINT64 Number, UINT64 Numerator, UINT64 Denominator)
@@ -676,53 +676,48 @@ int Play(const in_char* FileName)
 	UINT32 TempLng;
 	int maxlatency;
 	int thread_id;
-	
-	PausePlay = false;
+	VGM_PLAYER* p = (VGM_PLAYER*)vgmp;
+
 	decode_pos = 0;
 	decode_pos_ms = 0;
 	seek_needed = -1;
-	SampleRate = Options.SampleRate;
-	CHIP_SAMPLE_RATE = Options.ChipRate ? Options.ChipRate : Options.SampleRate;
-	
+	p->SampleRate = Options.SampleRate;
+	p->CHIP_SAMPLE_RATE = Options.ChipRate ? Options.ChipRate : Options.SampleRate;
+
 	// return -1 - jump to next file in playlist
 	// return +1 - stop the playlist
 #ifndef UNICODE_INPUT_PLUGIN
-	if (! OpenVGMFile(FileName))
+	if (! OpenVGMFile(vgmp, FileName))
 	{
 		if (GetGZFileLength(FileName) == 0xFFFFFFFF)
 			return -1;	// file not found
 		else
 			return +1;	// file invalid
 	}
-	
+
 	LoadPlayingVGMInfo(FileName);
 	strcpy(CurFileName, FileName);
 #else
-	if (! OpenVGMFileW(FileName))
+	if (! OpenVGMFileW(vgmp, FileName))
 	{
 		if (GetGZFileLengthW(FileName) == 0xFFFFFFFF)
 			return -1;	// file not found
 		else
 			return +1;	// file invalid
 	}
-	
+
 	LoadPlayingVGMInfoW(FileName);
 	wcscpy(CurFileName, FileName);
 #endif
-	
+
 	// -1 and -1 are to specify buffer and prebuffer lengths.
 	// -1 means to use the default, which all input plug-ins should really do.
 	maxlatency = WmpMod.outMod->Open(SampleRate, NUM_CHN, BIT_PER_SEC, -1, -1);
 	if (maxlatency < 0) // error opening device
 		return +1;
-	
-	if (! VGMHead.lngLoopOffset)
-		PauseTime = Options.PauseNL;
-	else
-		PauseTime = Options.PauseLp;
-	
-	PlayVGM();
-	
+
+	PlayVGM(vgmp);
+
 #ifndef UNICODE_INPUT_PLUGIN
 	TempLng = GetVGZFileSize(FileName);
 #else
@@ -730,51 +725,49 @@ int Play(const in_char* FileName)
 #endif
 	if (! TempLng)
 	{
-		if (VGMHead.lngGD3Offset)
-			TempLng = VGMHead.lngGD3Offset - VGMHead.lngDataOffset;
+		if (p->VGMHead.lngGD3Offset)
+			TempLng = p->VGMHead.lngGD3Offset - p->VGMHead.lngDataOffset;
 		else
-			TempLng = VGMHead.lngEOFOffset - VGMHead.lngDataOffset;
+			TempLng = p->VGMHead.lngEOFOffset - p->VGMHead.lngDataOffset;
 	}
 	// Bit/Sec = (TrackBytes * 8) / TrackTime
 	// kbps = Bytes * (8 * SampleRate) / (Samples * 1000)
-	if (VGMHead.lngTotalSamples)
+	if (p->VGMHead.lngTotalSamples)
 		TempLng = MulDivRound(TempLng, CalcSampleMSec(8000, 0x03),
-								(UINT64)VGMHead.lngTotalSamples * 1000);
+								(UINT64)p->VGMHead.lngTotalSamples * 1000);
 	else
 		TempLng = 0;
-	WmpMod.SetInfo(TempLng, (SampleRate + 500) / 1000, NUM_CHN, 1);
-	
+	WmpMod.SetInfo(TempLng, (p->SampleRate + 500) / 1000, NUM_CHN, 1);
+
 	// initialize visualization stuff
-	WmpMod.SAVSAInit(maxlatency, SampleRate);
-	WmpMod.VSASetInfo(SampleRate, NUM_CHN);
-	
+	WmpMod.SAVSAInit(maxlatency, p->SampleRate);
+	WmpMod.VSASetInfo(p->SampleRate, NUM_CHN);
+
 	// set the output plug-ins default volume.
 	// volume is 0-255, -666 is a token for current volume.
-	WmpMod.outMod->SetVolume(-666); 
-	
+	WmpMod.outMod->SetVolume(-666);
+
 	// launch decode thread
 	killDecodeThread = 0;
 	thread_handle = CreateThread(NULL, 0, &DecodeThread, NULL, 0, &thread_id);
-	
+
 	Dialogue_TrackChange();
-	
-	return 0; 
+
+	return 0;
 }
 
 // standard pause implementation
 void Pause(void)
 {
-	PauseVGM(true);
 	WmpMod.outMod->Pause(PausePlay);
-	
+
 	return;
 }
 
 void Unpause(void)
 {
-	PauseVGM(false);
 	WmpMod.outMod->Pause(PausePlay);
-	
+
 	return;
 }
 
@@ -788,7 +781,7 @@ void Stop(void)
 {
 	if (InStopFunc)
 		return;
-	
+
 	InStopFunc = true;
 	// TODO: add Mutex for this block.
 	//	Stupid XMPlay seems to call Stop() twice in 2 seperate threads.
@@ -804,24 +797,25 @@ void Stop(void)
 		CloseHandle(thread_handle);
 		thread_handle = INVALID_HANDLE_VALUE;
 	}
-	
+
 	// close output system
 	WmpMod.outMod->Close();
-	
+
 	// deinitialize visualization
 	WmpMod.SAVSADeInit();
-	
-	StopVGM();
-	
+
+	StopVGM(vgmp);
+
 	if (Options.ResetMuting)
 	{
 		UINT8 CurChip;
 		UINT8 CurCSet;
 		CHIP_OPTS* TempCOpt;
-		
+		VGM_PLAYER* p = (VGM_PLAYER*) vgmp;
+
 		for (CurCSet = 0x00; CurCSet < 0x02; CurCSet ++)
 		{
-			TempCOpt = (CHIP_OPTS*)&ChipOpts[CurCSet];
+			TempCOpt = (CHIP_OPTS*)&p->ChipOpts[CurCSet];
 			for (CurChip = 0x00; CurChip < CHIP_COUNT; CurChip ++, TempCOpt ++)
 			{
 				TempCOpt->Disabled = false;
@@ -830,16 +824,16 @@ void Stop(void)
 				TempCOpt->ChnMute3 = 0x00;
 			}
 		}
-		
+
 		// that would just make the check boxes flash during track change
 		// and Winamp's main window is locked when the configuration is open
 		// so I do it only when muting is reset
 		Dialogue_TrackChange();
 	}
-	
+
 	CloseVGMFile();
 	LoadPlayingVGMInfo(NULL);
-	
+
 	InStopFunc = false;
 	return;
 }
@@ -849,22 +843,23 @@ int GetFileLength(VGM_HEADER* FileHead)
 {
 	UINT32 SmplCnt;
 	UINT32 MSecCnt;
-	
-	if (! VGMMaxLoopM && FileHead->lngLoopSamples)
+	VGM_PLAYER* p = (VGM_PLAYER*)vgmp;
+
+	if (! p->VGMMaxLoopM && FileHead->lngLoopSamples)
 		return -1000;
-	
+
 	// Note: SmplCnt is ALWAYS 44.1 KHz, VGM's native sample rate
-	SmplCnt = FileHead->lngTotalSamples + FileHead->lngLoopSamples * (VGMMaxLoopM - 0x01);
-	if (FileHead == &VGMHead)
-		MSecCnt = CalcSampleMSec(SmplCnt, 0x02);
+	SmplCnt = FileHead->lngTotalSamples + FileHead->lngLoopSamples * (p->VGMMaxLoopM - 0x01);
+	if (FileHead == &p->VGMHead)
+		MSecCnt = CalcSampleMSec(p, SmplCnt, 0x02);
 	else
-		MSecCnt = CalcSampleMSecExt(SmplCnt, 0x02, FileHead);
-	
+		MSecCnt = CalcSampleMSecExt(p, SmplCnt, 0x02, FileHead);
+
 	if (FileHead->lngLoopSamples)
-		MSecCnt += FadeTime + Options.PauseLp;
+		MSecCnt += p->FadeTime + Options.PauseLp;
 	else
 		MSecCnt += Options.PauseNL;
-	
+
 	return MSecCnt;
 }
 
@@ -892,21 +887,21 @@ void SetOutputTime(int time_in_ms)	// for seeking
 	// when GetLength returns -1000.
 	if (time_in_ms >= 0)
 		seek_needed = time_in_ms;
-	
+
 	return;
 }
 
 void SetVolume(int volume)
 {
 	WmpMod.outMod->SetVolume(volume);
-	
+
 	return;
 }
 
 void SetPan(int pan)
 {
 	WmpMod.outMod->SetPan(pan);
-	
+
 	return;
 }
 
@@ -914,13 +909,13 @@ void UpdatePlayback(void)
 {
 	if (WmpMod.outMod == NULL || ! WmpMod.outMod->IsPlaying())
 		return;
-	
+
 	if (Options.ImmediateUpdate)
 	{
 		// add 30 ms - else it sounds like you seek back a little
 		SetOutputTime(GetOutputTime() + 30);
 	}
-	
+
 	return;
 }
 
@@ -933,14 +928,14 @@ int InfoDialog(const in_char* FileName, HWND hWnd)
 #else
 	SetInfoDlgFileW(FileName);
 #endif
-	
+
 	return DialogBox(WmpMod.hDllInstance, (LPTSTR)DlgFileInfo, hWnd, &FileInfoDialogProc);
 }
 
 const in_char* GetFileNameTitle(const in_char* FileName)
 {
 	const in_char* TempPnt;
-	
+
 #ifndef UNICODE_INPUT_PLUGIN
 	TempPnt = FileName + strlen(FileName) - 0x01;
 	while(TempPnt >= FileName && *TempPnt != '\\')
@@ -950,7 +945,7 @@ const in_char* GetFileNameTitle(const in_char* FileName)
 	while(TempPnt >= FileName && *TempPnt != L'\\')
 		TempPnt --;
 #endif
-	
+
 	return TempPnt + 0x01;
 }
 
@@ -964,7 +959,7 @@ void GetFileInfo(const in_char* filename, in_char* title, int* length_in_ms)
 	VGM_HEADER FileHead;
 	GD3_TAG FileTag;
 	const wchar_t* Tag_TrackName;
-	
+
 	// Note: If filename is be null OR of length zero, return info about the current file.
 	if (filename == NULL || filename[0x00] == '\0')
 	{
@@ -1032,15 +1027,15 @@ void GetFileInfo(const in_char* filename, in_char* title, int* length_in_ms)
 			}
 		}
 	}
-	
+
 	return;
 }
 
 void EQ_Set(int on, char data[10], int preamp)
 {
 	// unsupported
-	
-	// Format: each data byte is 0-63 (+20db <-> -20db) and preamp is the same. 
+
+	// Format: each data byte is 0-63 (+20db <-> -20db) and preamp is the same.
 	return;
 }
 
@@ -1050,31 +1045,32 @@ void EQ_Set(int on, char data[10], int preamp)
 
 DWORD WINAPI DecodeThread(LPVOID b)
 {
+	VGM_PLAYER* p = (VGM_PLAYER*)vgmp;
 	char sample_buffer[BLOCK_SIZE * 2];	// has to be twice as big as the blocksize
 	UINT32 RetSamples;
-	
+
 	SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
-	
-	while (! killDecodeThread) 
-	{ 
+
+	while (! killDecodeThread)
+	{
 		if (seek_needed != -1) // seek is needed.
 		{
-			decode_pos = MulDivRound(seek_needed, SampleRate, 1000);
+			decode_pos = MulDivRound(seek_needed, p->SampleRate, 1000);
 			//decode_pos_ms = MulDivRound(decode_pos, 1000, SampleRate);
 			decode_pos_ms = seek_needed;
-			
-			SeekVGM(false, decode_pos);
-			
+
+			SeekVGM(vgmp, false, decode_pos);
+
 			// flush output device and set output to seek position
 			WmpMod.outMod->Flush(decode_pos_ms);
 			seek_needed = -1;
 		}
-		
+
 		if (EndPlay /*|| VGMEnd*/)
 		{
 			// Playback finished
 			WmpMod.outMod->CanWrite();		// needed for some output drivers
-			
+
 			if (! WmpMod.outMod->IsPlaying())
 			{
 				// we're done playing, so tell Winamp and quit the thread.
@@ -1085,11 +1081,11 @@ DWORD WINAPI DecodeThread(LPVOID b)
 		}
 		else if (WmpMod.outMod->CanWrite() >= (BLOCK_SIZE * (WmpMod.dsp_isactive() ? 2 : 1)))
 			// CanWrite() returns the number of bytes you can write, so we check that
-			// to the block size. the reason we multiply the block size by two if 
-			// mod.dsp_isactive() is that DSP plug-ins can change it by up to a 
+			// to the block size. the reason we multiply the block size by two if
+			// mod.dsp_isactive() is that DSP plug-ins can change it by up to a
 			// factor of two (for tempo adjustment).
-		{	
-			RetSamples = FillBuffer((WAVE_16BS*)sample_buffer, RENDER_SAMPLES);
+		{
+			RetSamples = FillBuffer(vgmp, (WAVE_16BS*)sample_buffer, RENDER_SAMPLES);
 			if (RetSamples)
 			{
 				// send data to the visualization and dsp systems
@@ -1097,12 +1093,12 @@ DWORD WINAPI DecodeThread(LPVOID b)
 				WmpMod.VSAAddPCMData(sample_buffer, NUM_CHN, BIT_PER_SEC, decode_pos_ms);
 				if (WmpMod.dsp_isactive())
 					RetSamples = WmpMod.dsp_dosamples((short*)sample_buffer, RetSamples,
-														BIT_PER_SEC, NUM_CHN, SampleRate);
-				
+														BIT_PER_SEC, NUM_CHN, p->SampleRate);
+
 				WmpMod.outMod->Write(sample_buffer, RetSamples * SMPL_BYTES);
-				
+
 				decode_pos += RetSamples;
-				decode_pos_ms = MulDivRound(decode_pos, 1000, SampleRate);
+				decode_pos_ms = MulDivRound(decode_pos, 1000, p->SampleRate);
 			}
 			else
 			{
@@ -1114,7 +1110,7 @@ DWORD WINAPI DecodeThread(LPVOID b)
 			Sleep(20);	// Wait a little, until we can write again.
 		}
 	}
-	
+
 	return 0;
 }
 
@@ -1150,22 +1146,22 @@ In_Module WmpMod =
 	&Unpause,
 	&IsPaused,
 	&Stop,
-	
+
 	&GetLength,
 	&GetOutputTime,
 	&SetOutputTime,
-	
+
 	&SetVolume,
 	&SetPan,
-	
+
 	NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,	// visualization calls filled in by winamp
-	
+
 	NULL, NULL,	// dsp calls filled in by winamp
-	
+
 	&EQ_Set,
-	
+
 	NULL,	// setinfo call filled in by winamp
-	
+
 	NULL	// out_mod filled in by winamp
 };
 
