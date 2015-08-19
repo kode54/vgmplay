@@ -2223,6 +2223,7 @@ static void Chips_GeneralActions(VGM_PLAYER* p, UINT8 Mode)
                 {
                     CAA->StreamUpdate = ym3812_stream_update;
                     CAA->StreamUpdateParam = p->ym3812[CurChip];
+										p->ym3812_dual_data[CurChip] = NULL;
                 }
 
                 CAA->Volume = GetChipVolume(p, CAA->ChipType, CurChip, ChipCnt);
@@ -3037,7 +3038,11 @@ static void Chips_GeneralActions(VGM_PLAYER* p, UINT8 Mode)
 			else if (CAA->ChipType == 0x08)
 				device_stop_ym2610(p->ym2610[CurCSet]);
 			else if (CAA->ChipType == 0x09)
+			{
 				device_stop_ym3812(p->ym3812[CurCSet]);
+				free(p->ym3812_dual_data[CurCSet]);
+				p->ym3812_dual_data[CurCSet] = NULL;
+			}
 			else if (CAA->ChipType == 0x0A)
 				device_stop_ym3526(p->ym3526[CurCSet]);
 			else if (CAA->ChipType == 0x0B)
