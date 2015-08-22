@@ -23,7 +23,7 @@ typedef struct __OPLL_PATCH {
 /* slot */
 typedef struct __OPLL_SLOT {
 
-  OPLL_PATCH *patch;  
+  OPLL_PATCH *patch;
 
   e_int32 type ;          /* 0 : modulator 1 : carrier */
 
@@ -78,7 +78,7 @@ typedef struct __OPLL {
 #endif
 
   /* Register */
-  e_uint8 reg[0x40] ; 
+  e_uint8 reg[0x40] ;
   e_int32 slot_on_flag[18] ;
 
   /* Pitch Modulator */
@@ -124,9 +124,12 @@ EMU2413_API void OPLL_set_pan(OPLL *, e_uint32 ch, e_int32 pan);
 EMU2413_API void OPLL_writeIO(OPLL *, e_uint32 reg, e_uint32 val) ;
 EMU2413_API void OPLL_writeReg(OPLL *, e_uint32 reg, e_uint32 val) ;
 
+/* Advance engine */
+EMU2413_API void OPLL_advance (OPLL *);
+
 /* Synthsize */
 EMU2413_API e_int16 OPLL_calc(OPLL *) ;
-EMU2413_API void OPLL_calc_stereo(OPLL *, e_int32 **out, e_int32 samples) ;
+EMU2413_API void OPLL_calc_stereo(OPLL *, e_int32 **out, e_int32 samples, e_int32 ch) ; /* ch = -1 for normal operation */
 
 /* Misc */
 EMU2413_API void OPLL_setPatch(OPLL *, const e_uint8 *dump) ;
@@ -146,4 +149,3 @@ void OPLL_SetChipMode(OPLL* opll, e_uint8 Mode);
 #define dump2patch OPLL_dump2patch
 
 #endif
-

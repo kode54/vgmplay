@@ -70,7 +70,7 @@ void ym2413_stream_update(void *_info, stream_sample_t **outputs, int samples)
 		break;
 #endif
 	case EC_EMU2413:
-		OPLL_calc_stereo(info->chip, outputs, samples);
+		OPLL_calc_stereo(info->chip, outputs, samples, -1);
 		break;
 	}
 }
@@ -81,7 +81,7 @@ static void _stream_update(void *param, int interval)
 {
 	ym2413_state *info = (ym2413_state *)param;
 	/*stream_update(info->stream);*/
-	
+
 	switch(info->EMU_CORE)
 	{
 #ifdef ENABLE_ALL_CORES
@@ -90,7 +90,7 @@ static void _stream_update(void *param, int interval)
 		break;
 #endif
 	case EC_EMU2413:
-		OPLL_calc_stereo(info->chip, DUMMYBUF, 0);
+		OPLL_calc_stereo(info->chip, DUMMYBUF, 0, -1);
 		break;
 	}
 }
@@ -108,14 +108,14 @@ int device_start_ym2413(void **_info, int EMU_CORE, int clock, int CHIP_SAMPLING
 #else
 	EMU_CORE = EC_EMU2413;
 #endif
-	
+
 	info = (ym2413_state *) calloc(1, sizeof(ym2413_state));
 	*_info = (void*) info;
 
 	info->EMU_CORE = EMU_CORE;
 	info->Mode = (clock & 0x80000000) >> 31;
 	clock &= 0x7FFFFFFF;
-	
+
 	rate = clock/72;
 	if ((CHIP_SAMPLING_MODE == 0x01 && rate < CHIP_SAMPLE_RATE) ||
 		CHIP_SAMPLING_MODE == 0x02)
@@ -141,7 +141,7 @@ int device_start_ym2413(void **_info, int EMU_CORE, int clock, int CHIP_SAMPLING
 		info->chip = OPLL_new(clock, rate);
 		if (info->chip == NULL)
 			return 0;
-		
+
 		OPLL_SetChipMode(info->chip, info->Mode);
 		if (info->Mode)
 			OPLL_setPatch(info->chip, vrc7_inst);
@@ -264,7 +264,7 @@ void ym2413_set_mute_mask(void *_info, UINT32 MuteMask)
 		OPLL_SetMuteMask(info->chip, MuteMask);
 		break;
 	}
-	
+
 	return;
 }
 
@@ -283,7 +283,7 @@ void ym2413_set_panning(void *_info, INT16* PanVals)
 			OPLL_set_pan(info->chip, CurChn, PanVals[CurChn]);
 		break;
 	}
-	
+
 	return;
 }
 

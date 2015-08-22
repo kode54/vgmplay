@@ -9,7 +9,7 @@
              : Version 0.32 -- LPF implemented.
   2001 01-18 : Version 0.33 -- Fixed the drum problem, refine the mix-down method.
                             -- Fixed the LFO bug.
-  2001 01-24 : Version 0.35 -- Fixed the drum problem, 
+  2001 01-24 : Version 0.35 -- Fixed the drum problem,
                                support undocumented EG behavior.
   2001 02-02 : Version 0.38 -- Improved the performance.
                                Fixed the hi-hat and cymbal model.
@@ -34,7 +34,7 @@
   2002 05-30 : Version 0.60 -- Fixed HH&CYM generator and all voice datas.
   2004 04-10 : Version 0.61 -- Added YMF281B tone (defined by Chabin).
 
-  References: 
+  References:
     fmopl.c        -- 1999,2000 written by Tatsuyuki Satoh (MAME development).
     fmopl.c(fixed) -- (C) 2002 Jarek Burczynski.
     s_opl.c        -- 2001 written by Mamiya (NEZplug development).
@@ -70,8 +70,8 @@ static unsigned char default_inst[OPLL_TONE_NUM][(16 + 3) * 16] = {
 #else
 #define OPLL_TONE_NUM 3
 static unsigned char default_inst[OPLL_TONE_NUM][(16 + 3) * 16] = {
-  { 
-#include "2413tone.h" 
+  {
+#include "2413tone.h"
   },
   {
 #include "vrc7tone.h"
@@ -208,7 +208,7 @@ static OPLL_PATCH null_patch = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 static OPLL_PATCH default_patch[OPLL_TONE_NUM][(16 + 3) * 2];
 
 /* Definition of envelope mode */
-enum OPLL_EG_STATE 
+enum OPLL_EG_STATE
 { READY, ATTACK, DECAY, SUSHOLD, SUSTINE, RELEASE, SETTLE, FINISH };
 
 /* Phase incr table for Attack */
@@ -224,9 +224,9 @@ static e_int32 rksTable[2][8][2];
 static e_uint32 dphaseTable[512][8][16];
 
 /***************************************************
- 
+
                   Create tables
- 
+
 ****************************************************/
 INLINE static e_int32
 Min (e_int32 i, e_int32 j)
@@ -455,7 +455,7 @@ makeDphaseARTable (void)
         dphaseARTable[AR][Rks] = 0;
         break;
       case 15:
-        dphaseARTable[AR][Rks] = 0;/*EG_DP_WIDTH;*/ 
+        dphaseARTable[AR][Rks] = 0;/*EG_DP_WIDTH;*/
         break;
       default:
 #ifdef USE_SPEC_ENV_SPEED
@@ -1278,7 +1278,7 @@ calc_envelope (OPLL_SLOT * slot, e_int32 lfo)
 
   if (egout >= DB_MUTE)
     egout = DB_MUTE - 1;
-  
+
   slot->egout = egout | 3;
 }
 
@@ -1344,24 +1344,24 @@ calc_slot_snare (OPLL_SLOT * slot, e_uint32 noise)
 {
   if(slot->egout>=(DB_MUTE-1))
     return 0;
-  
+
   if(BIT(slot->pgout,7))
     return DB2LIN_TABLE[(noise?DB_POS(0.0):DB_POS(15.0))+slot->egout];
   else
     return DB2LIN_TABLE[(noise?DB_NEG(0.0):DB_NEG(15.0))+slot->egout];
 }
 
-/* 
-  TOP-CYM 
+/*
+  TOP-CYM
  */
 INLINE static e_int32
 calc_slot_cym (OPLL_SLOT * slot, e_uint32 pgout_hh)
 {
   e_uint32 dbout;
 
-  if (slot->egout >= (DB_MUTE - 1)) 
+  if (slot->egout >= (DB_MUTE - 1))
     return 0;
-  else if( 
+  else if(
       /* the same as fmopl.c */
       ((BIT(pgout_hh,PG_BITS-8)^BIT(pgout_hh,PG_BITS-1))|BIT(pgout_hh,PG_BITS-7)) ^
       /* different from fmopl.c */
@@ -1374,17 +1374,17 @@ calc_slot_cym (OPLL_SLOT * slot, e_uint32 pgout_hh)
   return DB2LIN_TABLE[dbout + slot->egout];
 }
 
-/* 
-  HI-HAT 
+/*
+  HI-HAT
 */
 INLINE static e_int32
 calc_slot_hat (OPLL_SLOT *slot, e_int32 pgout_cym, e_uint32 noise)
 {
   e_uint32 dbout;
 
-  if (slot->egout >= (DB_MUTE - 1)) 
+  if (slot->egout >= (DB_MUTE - 1))
     return 0;
-  else if( 
+  else if(
       /* the same as fmopl.c */
       ((BIT(slot->pgout,PG_BITS-8)^BIT(slot->pgout,PG_BITS-1))|BIT(slot->pgout,PG_BITS-7)) ^
       /* different from fmopl.c */
@@ -1520,7 +1520,7 @@ void OPLL_SetMuteMask(OPLL* opll, e_uint32 MuteMask)
 {
 	unsigned char CurChn;
 	e_uint32 ChnMsk;
-	
+
 	for (CurChn = 0; CurChn < 14; CurChn ++)
 	{
 		if (CurChn < 9)
@@ -1556,7 +1556,7 @@ void OPLL_SetMuteMask(OPLL* opll, e_uint32 MuteMask)
 		else
 			opll->mask &= ~ChnMsk;
 	}
-	
+
 	return;
 }
 
@@ -1579,7 +1579,7 @@ void OPLL_SetChipMode(OPLL* opll, e_uint8 Mode)
 {
 	// Enable/Disable VRC7 Mode (with only 6 instead of 9 channels and no rhythm part)
 	opll->vrc7_mode = Mode;
-	
+
 	return;
 }
 
@@ -1854,10 +1854,10 @@ void
 OPLL_set_pan (OPLL * opll, e_uint32 ch, e_int32 pan)
 {
 	e_uint32 fnl_ch;
-	
+
 	if (ch >= 14)
 		return;
-	
+
 	if (ch < 9)
 		fnl_ch = ch;
 	else
@@ -1866,7 +1866,7 @@ OPLL_set_pan (OPLL * opll, e_uint32 ch, e_int32 pan)
 }
 
 static void
-calc_stereo (OPLL * opll, e_int32 out[2])
+calc_stereo (OPLL * opll, e_int32 out[2], e_int32 ch)
 {
 	/* Maxim: added stereo control (multiply each side by a float in opll->pan[ch][side]) */
   e_int32 l=0,r=0;
@@ -1875,16 +1875,21 @@ calc_stereo (OPLL * opll, e_int32 out[2])
   e_int32 i;
   e_int32 channel;
 
-  update_ampm (opll);
-  update_noise (opll);
-
-  for(i=0;i<18;i++)
+  if (ch < 0)
   {
-    calc_phase(&opll->slot[i],opll->lfo_pm);
-    calc_envelope(&opll->slot[i],opll->lfo_am);
+    update_ampm (opll);
+    update_noise (opll);
+
+    for(i=0;i<18;i++)
+    {
+      calc_phase(&opll->slot[i],opll->lfo_pm);
+      calc_envelope(&opll->slot[i],opll->lfo_am);
+    }
   }
 
   for (i = 0; i < 6; i++)
+  {
+    if (ch >= 0 && i != ch) continue;
     if (!(opll->mask & OPLL_MASK_CH (i)) && (CAR(opll,i)->eg_mode != FINISH))
     {
       channel = calc_slot_car (CAR(opll,i), calc_slot_mod (MOD(opll,i)));
@@ -1899,144 +1904,153 @@ calc_stereo (OPLL * opll, e_int32 out[2])
         r += (e_int32)( channel * opll->pan[i][1] );
       }
     }
-
-
- if (! opll->vrc7_mode)
- {
-  if (opll->patch_number[6] <= 15)
-  {
-    if (!(opll->mask & OPLL_MASK_CH (6)) && (CAR(opll,6)->eg_mode != FINISH))
-    {
-      channel = calc_slot_car (CAR(opll,6), calc_slot_mod (MOD(opll,6)));
-      if ( opll->pan[6][0] == 1.0f )
-      {
-        l += channel;
-        r += channel;
-      }
-      else
-      {
-        l += (e_int32)( channel * opll->pan[6][0] );
-        r += (e_int32)( channel * opll->pan[6][1] );
-      }
-
-    }
-  }
-  else
-  {
-    if (!(opll->mask & OPLL_MASK_BD) && (CAR(opll,6)->eg_mode != FINISH))
-    {
-      channel = calc_slot_car (CAR(opll,6), calc_slot_mod (MOD(opll,6))) << 1;
-      if ( opll->pan[9][0] == 1.0f )
-      {
-        l += channel;
-        r += channel;
-      }
-      else
-      {
-        l += (e_int32)( channel * opll->pan[9][0] );
-        r += (e_int32)( channel * opll->pan[9][1] );
-      }
-    }
   }
 
-  if (opll->patch_number[7] <= 15)
-  {
-    if (!(opll->mask & OPLL_MASK_CH (7)) && (CAR (opll,7)->eg_mode != FINISH))
-    {
-      channel = calc_slot_car (CAR (opll,7), calc_slot_mod (MOD (opll,7)));
-      if ( opll->pan[7][0] == 1.0f )
-      {
-        l += channel;
-        r += channel;
-      }
-      else
-      {
-        l += (e_int32)( channel * opll->pan[7][0] );
-        r += (e_int32)( channel * opll->pan[7][1] );
-      }
-    }
-  }
-  else
-  {
-    if (!(opll->mask & OPLL_MASK_HH) && (MOD (opll,7)->eg_mode != FINISH))
-    {
-      channel = calc_slot_hat (MOD (opll,7), CAR(opll,8)->pgout, opll->noise_seed&1) << 1;
-      if ( opll->pan[10][0] == 1.0f )
-      {
-        l += channel;
-        r += channel;
-      }
-      else
-      {
-        l += (e_int32)( channel * opll->pan[10][0] );
-        r += (e_int32)( channel * opll->pan[10][1] );
-      }
-    }
-    if (!(opll->mask & OPLL_MASK_SD) && (CAR (opll,7)->eg_mode != FINISH))
-    {
-      channel = -(calc_slot_snare (CAR (opll,7), opll->noise_seed&1) << 1); // this one is negated
-      if ( opll->pan[11][0] == 1.0f )
-      {
-        l += channel;
-        r += channel;
-      }
-      else
-      {
-        l += (e_int32)( channel * opll->pan[11][0] );
-        r += (e_int32)( channel * opll->pan[11][1] );
-      }
-    }
-  }
 
-  if (opll->patch_number[8] <= 15)
+  if (! opll->vrc7_mode)
   {
-    if (!(opll->mask & OPLL_MASK_CH (8)) && (CAR (opll,8)->eg_mode != FINISH))
+    if (ch < 0 || ch == 6)
     {
-      channel = calc_slot_car (CAR (opll,8), calc_slot_mod (MOD (opll,8)));
-      if ( opll->pan[8][0] == 1.0f )
+      if (opll->patch_number[6] <= 15)
       {
-        l += channel;
-        r += channel;
+        if (!(opll->mask & OPLL_MASK_CH (6)) && (CAR(opll,6)->eg_mode != FINISH))
+        {
+          channel = calc_slot_car (CAR(opll,6), calc_slot_mod (MOD(opll,6)));
+          if ( opll->pan[6][0] == 1.0f )
+          {
+            l += channel;
+            r += channel;
+          }
+          else
+          {
+            l += (e_int32)( channel * opll->pan[6][0] );
+            r += (e_int32)( channel * opll->pan[6][1] );
+          }
+        }
       }
       else
       {
-        l += (e_int32)( channel * opll->pan[8][0] );
-        r += (e_int32)( channel * opll->pan[8][1] );
+        if (!(opll->mask & OPLL_MASK_BD) && (CAR(opll,6)->eg_mode != FINISH))
+        {
+          channel = calc_slot_car (CAR(opll,6), calc_slot_mod (MOD(opll,6))) << 1;
+          if ( opll->pan[9][0] == 1.0f )
+          {
+            l += channel;
+            r += channel;
+          }
+          else
+          {
+            l += (e_int32)( channel * opll->pan[9][0] );
+            r += (e_int32)( channel * opll->pan[9][1] );
+          }
+        }
       }
     }
-  }
-  else
-  {
-    if (!(opll->mask & OPLL_MASK_TOM) && (MOD (opll,8)->eg_mode != FINISH))
+
+    if (ch < 0 || ch == 7)
     {
-      channel = calc_slot_tom (MOD (opll,8)) << 1;
-      if ( opll->pan[12][0] == 1.0f )
+      if (opll->patch_number[7] <= 15)
       {
-        l += channel;
-        r += channel;
+        if (!(opll->mask & OPLL_MASK_CH (7)) && (CAR (opll,7)->eg_mode != FINISH))
+        {
+          channel = calc_slot_car (CAR (opll,7), calc_slot_mod (MOD (opll,7)));
+          if ( opll->pan[7][0] == 1.0f )
+          {
+            l += channel;
+            r += channel;
+          }
+          else
+          {
+            l += (e_int32)( channel * opll->pan[7][0] );
+            r += (e_int32)( channel * opll->pan[7][1] );
+          }
+        }
       }
       else
       {
-        l += (e_int32)( channel * opll->pan[12][0] );
-        r += (e_int32)( channel * opll->pan[12][1] );
+        if (!(opll->mask & OPLL_MASK_HH) && (MOD (opll,7)->eg_mode != FINISH))
+        {
+          channel = calc_slot_hat (MOD (opll,7), CAR(opll,8)->pgout, opll->noise_seed&1) << 1;
+          if ( opll->pan[10][0] == 1.0f )
+          {
+            l += channel;
+            r += channel;
+          }
+          else
+          {
+            l += (e_int32)( channel * opll->pan[10][0] );
+            r += (e_int32)( channel * opll->pan[10][1] );
+          }
+        }
+        if (!(opll->mask & OPLL_MASK_SD) && (CAR (opll,7)->eg_mode != FINISH))
+        {
+          channel = -(calc_slot_snare (CAR (opll,7), opll->noise_seed&1) << 1); // this one is negated
+          if ( opll->pan[11][0] == 1.0f )
+          {
+            l += channel;
+            r += channel;
+          }
+          else
+          {
+            l += (e_int32)( channel * opll->pan[11][0] );
+            r += (e_int32)( channel * opll->pan[11][1] );
+          }
+        }
       }
     }
-    if (!(opll->mask & OPLL_MASK_CYM) && (CAR (opll,8)->eg_mode != FINISH))
+
+    if (ch < 0 || ch == 8)
     {
-      channel = -(calc_slot_cym (CAR (opll,8), MOD(opll,7)->pgout) << 1); // negated
-      if ( opll->pan[13][0] == 1.0f )
+      if (opll->patch_number[8] <= 15)
       {
-        l += channel;
-        r += channel;
+        if (!(opll->mask & OPLL_MASK_CH (8)) && (CAR (opll,8)->eg_mode != FINISH))
+        {
+          channel = calc_slot_car (CAR (opll,8), calc_slot_mod (MOD (opll,8)));
+          if ( opll->pan[8][0] == 1.0f )
+          {
+            l += channel;
+            r += channel;
+          }
+          else
+          {
+            l += (e_int32)( channel * opll->pan[8][0] );
+            r += (e_int32)( channel * opll->pan[8][1] );
+          }
+        }
       }
       else
       {
-        l += (e_int32)( channel * opll->pan[13][0] );
-        r += (e_int32)( channel * opll->pan[13][1] );
+        if (!(opll->mask & OPLL_MASK_TOM) && (MOD (opll,8)->eg_mode != FINISH))
+        {
+          channel = calc_slot_tom (MOD (opll,8)) << 1;
+          if ( opll->pan[12][0] == 1.0f )
+          {
+            l += channel;
+            r += channel;
+          }
+          else
+          {
+            l += (e_int32)( channel * opll->pan[12][0] );
+            r += (e_int32)( channel * opll->pan[12][1] );
+          }
+        }
+        if (!(opll->mask & OPLL_MASK_CYM) && (CAR (opll,8)->eg_mode != FINISH))
+        {
+          channel = -(calc_slot_cym (CAR (opll,8), MOD(opll,7)->pgout) << 1); // negated
+          if ( opll->pan[13][0] == 1.0f )
+          {
+            l += channel;
+            r += channel;
+          }
+          else
+          {
+            l += (e_int32)( channel * opll->pan[13][0] );
+            r += (e_int32)( channel * opll->pan[13][1] );
+          }
+        }
       }
     }
-  }
- } // end if (! opll->vrc7_mode)
+  } // end if (! opll->vrc7_mode)
 /*
   out[1] = (b[1] + b[3] + ((r[1] + r[3]) << 1)) <<3;
   out[0] = (b[2] + b[3] + ((r[2] + r[3]) << 1)) <<3;
@@ -2069,7 +2083,14 @@ OPLL_calc_stereo (OPLL * opll, e_int32 out[2], samples)
                        + (double) opll->sprev[1] * opll->oplltime) / opll->opllstep);
 }*/
 void
-OPLL_calc_stereo (OPLL * opll, e_int32 **out, e_int32 samples)
+OPLL_advance (OPLL * opll)
+{
+  e_int32 buffers[2];
+  calc_stereo (opll, buffers, -1);
+}
+
+void
+OPLL_calc_stereo (OPLL * opll, e_int32 **out, e_int32 samples, e_int32 ch)
 {
   e_int32 *bufMO = out[0];
   e_int32 *bufRO = out[1];
@@ -2081,18 +2102,18 @@ OPLL_calc_stereo (OPLL * opll, e_int32 **out, e_int32 samples)
   {
     if (!opll->quality)
     {
-      calc_stereo (opll, buffers);
+      calc_stereo (opll, buffers, ch);
       bufMO[i] = buffers[0];
       bufRO[i] = buffers[1];
     }
     else
     {
       while (opll->realstep > opll->oplltime)
-      { 
+      {
         opll->oplltime += opll->opllstep;
         opll->sprev[0] = opll->snext[0];
         opll->sprev[1] = opll->snext[1];
-        calc_stereo (opll, opll->snext);
+        calc_stereo (opll, opll->snext, ch);
       }
 
       opll->oplltime -= opll->realstep;
