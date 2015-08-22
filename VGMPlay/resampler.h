@@ -14,7 +14,7 @@ License along with this module; if not, write to the Free Software Foundation,
 Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA */
 
 #define RESAMPLER_BITS 32
-// #define RESAMPLER_DECORATE
+#define RESAMPLER_DECORATE vgmplay
 
 #ifdef RESAMPLER_DECORATE
 #undef PASTE
