@@ -31,8 +31,8 @@ OPTS = -O2
 
 all: libvgmplay.a vgm2pcm
 
-vgm2pcm: $(OBJS)
-	$(CC) $(OPTS) -o $@ $^ libvgmplay.a -lz
+vgm2pcm: $(OBJS) libvgmplay.a
+	$(CC) $(OPTS) -o $@ $^ -lz
 
 libvgmplay.a : $(LIB_OBJS)
 	$(AR) rcs $@ $^
