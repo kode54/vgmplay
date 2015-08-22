@@ -208,7 +208,7 @@ void resampler_write_pair(void *_r, sample_t ls, sample_t rs)
 
 	if (!r->latency)
 	{
-		for (int i = 0; i < adj_width; ++i)
+		for (int i = 0; i < adj_width / 2; ++i)
 		{
 			r->buffer_in[r->inptr + 0] = 0;
 			r->buffer_in[r->inptr + 1] = 0;
