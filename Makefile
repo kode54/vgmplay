@@ -25,7 +25,8 @@ LIB_OBJS = VGMPlay/ChipMapper.o VGMPlay/VGMPlay.o VGMPlay/chips/2151intf.o\
 	VGMPlay/chips/ws_audio.o VGMPlay/chips/x1_010.o VGMPlay/chips/ym2151.o\
 	VGMPlay/chips/ym2413.o VGMPlay/chips/ym2413_opl.o VGMPlay/chips/ym2413hd.o\
 	VGMPlay/chips/ym2612.o VGMPlay/chips/ymdeltat.o VGMPlay/chips/ymf262.o\
-	VGMPlay/chips/ymf271.o VGMPlay/chips/ymf278b.o VGMPlay/chips/ymz280b.o
+	VGMPlay/chips/ymf271.o VGMPlay/chips/ymf278b.o VGMPlay/chips/ymz280b.o\
+	VGMPlay/resampler.o
 
 OPTS = -O2
 

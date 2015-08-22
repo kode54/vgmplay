@@ -20,7 +20,7 @@ typedef struct chip_options
 	//	YM2612:	Bit 0 - DAC Highpass Enable, Bit 1 - SSG-EG Enable
 	//	YM-OPN:	Bit 0 - Disable AY8910-Part
 	UINT16 SpecialFlags;
-	
+
 	// Channel Mute Mask - 1 Channel is represented by 1 bit
 	UINT32 ChnMute1;
 	// Mask 2 - used by YMF287B for OPL4 Wavetable Synth and by YM2608/YM2610 for PCM
@@ -83,22 +83,13 @@ struct chip_audio_attributes
 {
     UINT32 TargetSmpRate;
     UINT32 SmpRate;
+		UINT32 LastSmpRate;
     UINT16 Volume;
     UINT8 ChipType;
     UINT8 ChipID;		// 0 - 1st chip, 1 - 2nd chip, etc.
-    // Resampler Type:
-    //	00 - Old
-    //	01 - Upsampling
-    //	02 - Copy
-    //	03 - Downsampling
-    UINT8 Resampler;
+		void* Resampler;
     strm_func StreamUpdate;
     void* StreamUpdateParam;
-    UINT32 SmpP;		// Current Sample (Playback Rate)
-    UINT32 SmpLast;		// Sample Number Last
-    UINT32 SmpNext;		// Sample Number Next
-    WAVE_32BS LSmpl;	// Last Sample
-    WAVE_32BS NSmpl;	// Next Sample
     CAUD_ATTR* Paired;
 };
 
@@ -176,31 +167,31 @@ typedef struct vgm_player
 {
     // Options Variables
     UINT32 SampleRate;	// Note: also used by some sound cores to determinate the chip sample rate
-    
+
     UINT32 VGMMaxLoop;
     UINT32 VGMPbRate;	// in Hz, ignored if this value or VGM's lngRate Header value is 0
 #ifdef ADDITIONAL_FORMATS
     UINT32 CMFMaxLoop;
 #endif
     UINT32 FadeTime;
-    
+
     float VolumeLevel;
     bool SurroundSound;
     bool FadeRAWLog;
     //bool FullBufFill;	// Fill Buffer until it's full
-    
+
     bool DoubleSSGVol;
-    
+
     UINT8 ResampleMode;	// 00 - HQ both, 01 - LQ downsampling, 02 - LQ both
     UINT8 CHIP_SAMPLING_MODE;
     INT32 CHIP_SAMPLE_RATE;
-    
+
     CHIPS_OPTION ChipOpts[0x02];
-    
+
     stream_sample_t* DUMMYBUF[0x02];
-    
+
     char* AppPaths[8];
-    
+
     UINT8 FileMode;
     VGM_HEADER VGMHead;
     VGM_HDR_EXTRA VGMHeadX;
@@ -208,25 +199,25 @@ typedef struct vgm_player
     UINT32 VGMDataLen;
     UINT8* VGMData;
     GD3_TAG VGMTag;
-    
+
 #define PCM_BANK_COUNT	0x40
     VGM_PCM_BANK PCMBank[PCM_BANK_COUNT];
     PCMBANK_TBL PCMTbl;
     UINT8 DacCtrlUsed;
     UINT8 DacCtrlUsg[0xFF];
     DACCTRL_DATA DacCtrl[0xFF];
-    
+
     CHIP_AUDIO ChipAudio[0x02];
     CAUD_ATTR CA_Paired[0x02][0x03];
     float MasterVol;
-    
+
     CA_LIST ChipListBuffer[0x200];
     CA_LIST* ChipListAll;	// all chips needed for playback (in general)
     //CA_LIST* ChipListOpt;	// ChipListAll minus muted chips
-    
+
 #define SMPL_BUFSIZE	0x100
     INT32* StreamBufs[0x02];
-    
+
     UINT32 VGMPos;
     INT32 VGMSmplPos;
     INT32 VGMSmplPlayed;
@@ -247,14 +238,14 @@ typedef struct vgm_player
     float VolumeLevelM;
     float FinalVol;
     bool ResetPBTimer;
-    
+
     UINT8 IsVGMInit;
     UINT16 Last95Drum;	// for optvgm debugging
     UINT16 Last95Max;	// for optvgm debugging
     UINT32 Last95Freq;	// for optvgm debugging
-    
+
     bool ErrorHappened;
-    
+
     // the chips' states
     void * sn764xx[2];
     void * ym2413[2];

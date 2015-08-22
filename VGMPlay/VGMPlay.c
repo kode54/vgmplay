@@ -34,6 +34,8 @@
 
 #include <zlib.h>
 
+#include "resampler.h"
+
 #include "chips/mamedef.h"
 
 // integer types for fast integer calculation
@@ -3106,6 +3108,9 @@ static void Chips_GeneralActions(VGM_PLAYER* p, UINT8 Mode)
 			else if (CAA->ChipType == 0x28)
 				device_stop_iremga20(p->ga20[CurCSet]);
 
+		  resampler_destroy(CAA->Resampler);
+			CAA->Resampler = 0x00;
+
 			CAA->ChipType = 0xFF;	// mark as "unused"
 		}	// end for CurChip
 
@@ -4844,41 +4849,13 @@ static void SetupResampler(VGM_PLAYER* p, CAUD_ATTR* CAA)
 {
 	if (! CAA->SmpRate)
 	{
-		CAA->Resampler = 0xFF;
+		CAA->Resampler = 0x00;
 		return;
 	}
 
     CAA->TargetSmpRate = p->SampleRate;
 
-	if (CAA->SmpRate < CAA->TargetSmpRate)
-		CAA->Resampler = 0x01;
-	else if (CAA->SmpRate == CAA->TargetSmpRate)
-		CAA->Resampler = 0x02;
-	else if (CAA->SmpRate > CAA->TargetSmpRate)
-		CAA->Resampler = 0x03;
-	if (CAA->Resampler == 0x01 || CAA->Resampler == 0x03)
-	{
-		if (p->ResampleMode == 0x02 || (p->ResampleMode == 0x01 && CAA->Resampler == 0x03))
-			CAA->Resampler = 0x00;
-	}
-
-	CAA->SmpP = 0x00;
-	CAA->SmpLast = 0x00;
-	CAA->SmpNext = 0x00;
-	CAA->LSmpl.Left = 0x00;
-	CAA->LSmpl.Right = 0x00;
-	if (CAA->Resampler == 0x01)
-	{
-		// Pregenerate first Sample (the upsampler is always one too late)
-		CAA->StreamUpdate(CAA->StreamUpdateParam, p->StreamBufs, 1);
-		CAA->NSmpl.Left = p->StreamBufs[0x00][0x00];
-		CAA->NSmpl.Right = p->StreamBufs[0x01][0x00];
-	}
-	else
-	{
-		CAA->NSmpl.Left = 0x00;
-		CAA->NSmpl.Right = 0x00;
-	}
+		CAA->Resampler = resampler_create();
 
 	return;
 }
@@ -4890,17 +4867,7 @@ static void ChangeChipSampleRate(void* DataPtr, UINT32 NewSmplRate)
 	if (CAA->SmpRate == NewSmplRate)
 		return;
 
-	// quick and dirty hack to make sample rate changes work
 	CAA->SmpRate = NewSmplRate;
-    if (CAA->SmpRate < CAA->TargetSmpRate)
-        CAA->Resampler = 0x01;
-    else if (CAA->SmpRate == CAA->TargetSmpRate)
-        CAA->Resampler = 0x02;
-    else if (CAA->SmpRate > CAA->TargetSmpRate)
-        CAA->Resampler = 0x03;
-	CAA->SmpP = 1;
-	CAA->SmpNext -= CAA->SmpLast;
-	CAA->SmpLast = 0x00;
 
 	return;
 }
@@ -4913,10 +4880,26 @@ INLINE INT16 Limit2Short(INT32 Value)
 	NewValue = Value;
 	if (NewValue < -0x8000)
 		NewValue = -0x8000;
-	if (NewValue > 0x7FFF)
+	else if (NewValue > 0x7FFF)
 		NewValue = 0x7FFF;
 
 	return (INT16)NewValue;
+}
+
+INLINE INT32 LimitScaleAdd(INT32 Target, INT32 Value, UINT16 Scale)
+{
+	INT64 NewValue;
+
+	NewValue = (INT64)Value;
+	NewValue *= (INT64)Scale;
+	NewValue += (INT64)Target;
+
+	if (NewValue < -0x80000000LL)
+		NewValue = -0x80000000LL;
+	else if (NewValue > 0x7FFFFFFFLL)
+		NewValue = 0x7FFFFFFFLL;
+
+	return (INT32)NewValue;
 }
 
 static void null_update(void *param, stream_sample_t **outputs, int samples)
@@ -4942,252 +4925,50 @@ static void dual_opl2_stereo(void *param, stream_sample_t **outputs, int samples
 	return;
 }
 
-// I recommend 11 bits as it's fast and accurate
-#define FIXPNT_BITS		11
-#define FIXPNT_FACT		(1 << FIXPNT_BITS)
-#if (FIXPNT_BITS <= 11)
-	typedef UINT32	SLINT;	// 32-bit is a lot faster
-#else
-	typedef UINT64	SLINT;
-#endif
-#define FIXPNT_MASK		(FIXPNT_FACT - 1)
-
-#define getfriction(x)	((x) & FIXPNT_MASK)
-#define getnfriction(x)	((FIXPNT_FACT - (x)) & FIXPNT_MASK)
-#define fpi_floor(x)	((x) & ~FIXPNT_MASK)
-#define fpi_ceil(x)		((x + FIXPNT_MASK) & ~FIXPNT_MASK)
-#define fp2i_floor(x)	((x) / FIXPNT_FACT)
-#define fp2i_ceil(x)	((x + FIXPNT_MASK) / FIXPNT_FACT)
-
 static void ResampleChipStream(VGM_PLAYER* p, CA_LIST* CLst, WAVE_32BS* RetSample, UINT32 Length)
 {
 	CAUD_ATTR* CAA;
 	INT32* CurBufL;
 	INT32* CurBufR;
-	INT32* StreamPnt[0x02];
-	UINT32 InBase;
-	UINT32 InPos;
-	UINT32 InPosNext;
-	UINT32 OutPos;
-	UINT32 SmpFrc;	// Sample Friction
-	UINT32 InPre;
-	UINT32 InNow;
-	SLINT InPosL;
-	INT64 TempSmpL;
-	INT64 TempSmpR;
-	INT32 TempS32L;
-	INT32 TempS32R;
 	INT32 SmpCnt;	// must be signed, else I'm getting calculation errors
 	INT32 CurSmpl;
-    UINT32 SampleRate;
-	UINT64 ChipSmpRate;
+  UINT32 SampleRate;
+	UINT32 OutPos;
+	sample_t ls, rs;
 
 	CAA = CLst->CAud;
 	CurBufL = p->StreamBufs[0x00];
 	CurBufR = p->StreamBufs[0x01];
 
-    SampleRate = p->SampleRate;
+  SampleRate = p->SampleRate;
+
+	OutPos = 0;
 
 	// This Do-While-Loop gets and resamples the chip output of one or more chips.
 	// It's a loop to support the AY8910 paired with the YM2203/YM2608/YM2610.
 	do
 	{
-		switch(CAA->Resampler)
+		for (OutPos = 0; OutPos < Length; OutPos++)
 		{
-		case 0x00:	// old, but very fast resampler
-			CAA->SmpLast = CAA->SmpNext;
-			CAA->SmpP += Length;
-			CAA->SmpNext = (UINT32)((UINT64)CAA->SmpP * CAA->SmpRate / SampleRate);
-			if (CAA->SmpLast >= CAA->SmpNext)
+			if (CAA->LastSmpRate != CAA->SmpRate)
 			{
-				RetSample->Left += CAA->LSmpl.Left * CAA->Volume;
-				RetSample->Right += CAA->LSmpl.Right * CAA->Volume;
+				resampler_set_rate(CAA->Resampler, (double)CAA->SmpRate / (double)CAA->TargetSmpRate);
+				CAA->LastSmpRate = CAA->SmpRate;
 			}
-			else
-			{
-				SmpCnt = CAA->SmpNext - CAA->SmpLast;
 
+			SmpCnt = resampler_get_min_fill(CAA->Resampler) / 2;
+
+			if (SmpCnt)
+			{
 				CAA->StreamUpdate(CAA->StreamUpdateParam, p->StreamBufs, SmpCnt);
-
-				if (SmpCnt == 1)
-				{
-					RetSample->Left += CurBufL[0x00] * CAA->Volume;
-					RetSample->Right += CurBufR[0x00] * CAA->Volume;
-					CAA->LSmpl.Left = CurBufL[0x00];
-					CAA->LSmpl.Right = CurBufR[0x00];
-				}
-				else if (SmpCnt == 2)
-				{
-					RetSample->Left += (CurBufL[0x00] + CurBufL[0x01]) * CAA->Volume >> 1;
-					RetSample->Right += (CurBufR[0x00] + CurBufR[0x01]) * CAA->Volume >> 1;
-					CAA->LSmpl.Left = CurBufL[0x01];
-					CAA->LSmpl.Right = CurBufR[0x01];
-				}
-				else
-				{
-					TempS32L = CurBufL[0x00];
-					TempS32R = CurBufR[0x00];
-					for (CurSmpl = 0x01; CurSmpl < SmpCnt; CurSmpl ++)
-					{
-						TempS32L += CurBufL[CurSmpl];
-						TempS32R += CurBufR[CurSmpl];
-					}
-					RetSample->Left += TempS32L * CAA->Volume / SmpCnt;
-					RetSample->Right += TempS32R * CAA->Volume / SmpCnt;
-					CAA->LSmpl.Left = CurBufL[SmpCnt - 1];
-					CAA->LSmpl.Right = CurBufR[SmpCnt - 1];
-				}
-			}
-			break;
-		case 0x01:	// Upsampling
-			ChipSmpRate = CAA->SmpRate;
-			InPosL = (SLINT)(FIXPNT_FACT * CAA->SmpP * ChipSmpRate / SampleRate);
-			InPre = (UINT32)fp2i_floor(InPosL);
-			InNow = (UINT32)fp2i_ceil(InPosL);
-			/*if (InNow - CAA->SmpNext >= SMPL_BUFSIZE)
-			{
-				printf("Sample Buffer Overflow!\n");
-#ifdef _DEBUG
-				*(char*)NULL = 0;
-#endif
-				CAA->SmpLast = 0;
-				CAA->SmpNext = 0;
-				CAA->SmpP = 0;
-				break;
-			}*/
-
-			CurBufL[0x00] = CAA->LSmpl.Left;
-			CurBufR[0x00] = CAA->LSmpl.Right;
-			CurBufL[0x01] = CAA->NSmpl.Left;
-			CurBufR[0x01] = CAA->NSmpl.Right;
-			StreamPnt[0x00] = &CurBufL[0x02];
-			StreamPnt[0x01] = &CurBufR[0x02];
-			CAA->StreamUpdate(CAA->StreamUpdateParam, StreamPnt, InNow - CAA->SmpNext);
-
-			InBase = FIXPNT_FACT + (UINT32)(InPosL - (SLINT)CAA->SmpNext * FIXPNT_FACT);
-			/*if (fp2i_floor(InBase) >= SMPL_BUFSIZE)
-			{
-				printf("Sample Buffer Overflow!\n");
-#ifdef _DEBUG
-				*(char*)NULL = 0;
-#endif
-				CAA->SmpLast = 0;
-				CAA->SmpP = 0;
-				break;
-			}*/
-			SmpCnt = FIXPNT_FACT;
-			CAA->SmpLast = InPre;
-			CAA->SmpNext = InNow;
-			for (OutPos = 0x00; OutPos < Length; OutPos ++)
-			{
-				InPos = InBase + (UINT32)(FIXPNT_FACT * OutPos * ChipSmpRate / SampleRate);
-
-				InPre = fp2i_floor(InPos);
-				InNow = fp2i_ceil(InPos);
-				SmpFrc = getfriction(InPos);
-
-				// Linear interpolation
-				TempSmpL = ((INT64)CurBufL[InPre] * (FIXPNT_FACT - SmpFrc)) +
-							((INT64)CurBufL[InNow] * SmpFrc);
-				TempSmpR = ((INT64)CurBufR[InPre] * (FIXPNT_FACT - SmpFrc)) +
-							((INT64)CurBufR[InNow] * SmpFrc);
-				RetSample[OutPos].Left += (INT32)(TempSmpL * CAA->Volume / SmpCnt);
-				RetSample[OutPos].Right += (INT32)(TempSmpR * CAA->Volume / SmpCnt);
-			}
-			CAA->LSmpl.Left = CurBufL[InPre];
-			CAA->LSmpl.Right = CurBufR[InPre];
-			CAA->NSmpl.Left = CurBufL[InNow];
-			CAA->NSmpl.Right = CurBufR[InNow];
-			CAA->SmpP += Length;
-			break;
-		case 0x02:	// Copying
-			CAA->SmpNext = CAA->SmpP * CAA->SmpRate / SampleRate;
-			CAA->StreamUpdate(CAA->StreamUpdateParam, p->StreamBufs, Length);
-
-			for (OutPos = 0x00; OutPos < Length; OutPos ++)
-			{
-				RetSample[OutPos].Left += CurBufL[OutPos] * CAA->Volume;
-				RetSample[OutPos].Right += CurBufR[OutPos] * CAA->Volume;
-			}
-			CAA->SmpP += Length;
-			CAA->SmpLast = CAA->SmpNext;
-			break;
-		case 0x03:	// Downsampling
-			ChipSmpRate = CAA->SmpRate;
-			InPosL = (SLINT)(FIXPNT_FACT * (CAA->SmpP + Length) * ChipSmpRate / SampleRate);
-			CAA->SmpNext = (UINT32)fp2i_ceil(InPosL);
-
-			CurBufL[0x00] = CAA->LSmpl.Left;
-			CurBufR[0x00] = CAA->LSmpl.Right;
-			StreamPnt[0x00] = &CurBufL[0x01];
-			StreamPnt[0x01] = &CurBufR[0x01];
-			CAA->StreamUpdate(CAA->StreamUpdateParam, StreamPnt, CAA->SmpNext - CAA->SmpLast);
-
-			InPosL = (SLINT)(FIXPNT_FACT * CAA->SmpP * ChipSmpRate / SampleRate);
-			// I'm adding 1.0 to avoid negative indexes
-			InBase = FIXPNT_FACT + (UINT32)(InPosL - (SLINT)CAA->SmpLast * FIXPNT_FACT);
-			InPosNext = InBase;
-			for (OutPos = 0x00; OutPos < Length; OutPos ++)
-			{
-				//InPos = InBase + (UINT32)(FIXPNT_FACT * OutPos * ChipSmpRate / SampleRate);
-				InPos = InPosNext;
-				InPosNext = InBase + (UINT32)(FIXPNT_FACT * (OutPos+1) * ChipSmpRate / SampleRate);
-
-				// first frictional Sample
-				SmpFrc = getnfriction(InPos);
-				if (SmpFrc)
-				{
-					InPre = fp2i_floor(InPos);
-					TempSmpL = (INT64)CurBufL[InPre] * SmpFrc;
-					TempSmpR = (INT64)CurBufR[InPre] * SmpFrc;
-				}
-				else
-				{
-					TempSmpL = TempSmpR = 0x00;
-				}
-				SmpCnt = SmpFrc;
-
-				// last frictional Sample
-				SmpFrc = getfriction(InPosNext);
-				InPre = fp2i_floor(InPosNext);
-				if (SmpFrc)
-				{
-					TempSmpL += (INT64)CurBufL[InPre] * SmpFrc;
-					TempSmpR += (INT64)CurBufR[InPre] * SmpFrc;
-					SmpCnt += SmpFrc;
-				}
-
-				// whole Samples in between
-				//InPre = fp2i_floor(InPosNext);
-				InNow = fp2i_ceil(InPos);
-				SmpCnt += (InPre - InNow) * FIXPNT_FACT;	// this is faster
-				while(InNow < InPre)
-				{
-					TempSmpL += (INT64)CurBufL[InNow] * FIXPNT_FACT;
-					TempSmpR += (INT64)CurBufR[InNow] * FIXPNT_FACT;
-					//SmpCnt ++;
-					InNow ++;
-				}
-
-				RetSample[OutPos].Left += (INT32)(TempSmpL * CAA->Volume / SmpCnt);
-				RetSample[OutPos].Right += (INT32)(TempSmpR * CAA->Volume / SmpCnt);
+				for (CurSmpl = 0; CurSmpl < SmpCnt; CurSmpl++)
+					resampler_write_pair(CAA->Resampler, CurBufL[CurSmpl], CurBufR[CurSmpl]);
 			}
 
-			CAA->LSmpl.Left = CurBufL[InPre];
-			CAA->LSmpl.Right = CurBufR[InPre];
-			CAA->SmpP += Length;
-			CAA->SmpLast = CAA->SmpNext;
-			break;
-		default:
-			CAA->SmpP += SampleRate;
-			break;	// do absolutely nothing
-		}
+			resampler_read_pair(CAA->Resampler, &ls, &rs);
 
-		if (CAA->SmpLast >= CAA->SmpRate)
-		{
-			CAA->SmpLast -= CAA->SmpRate;
-			CAA->SmpNext -= CAA->SmpRate;
-			CAA->SmpP -= SampleRate;
+			RetSample[OutPos].Left = LimitScaleAdd(RetSample[OutPos].Left, ls, CAA->Volume);
+			RetSample[OutPos].Right = LimitScaleAdd(RetSample[OutPos].Right, rs, CAA->Volume);
 		}
 
 		CAA = CAA->Paired;
