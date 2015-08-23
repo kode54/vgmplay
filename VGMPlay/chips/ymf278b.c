@@ -364,7 +364,7 @@ INLINE void ymf278b_slot_set_lfo(YMF278BSlot* slot, int newlfo)
 	slot->lfo_max = lfo_period[slot->lfo];
 }
 
-INLINE ymf278b_advance(YMF278BChip* chip)
+INLINE void ymf278b_advance(YMF278BChip* chip)
 {
 	YMF278BSlot* op;
 	int i;
