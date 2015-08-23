@@ -27,6 +27,10 @@ struct vgm_file
 	UINT32 (*GetSize)(VGM_FILE*);
 };
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void * VGMPlay_Init(void);
 void VGMPlay_Init2(void* vgmp);
 void VGMPlay_Deinit(void* vgmp);
@@ -64,3 +68,8 @@ void RefreshPanning(void* vgmp);
 void RefreshPlaybackOptions(void* vgmp);
 
 UINT32 FillBuffer(void* vgmp, WAVE_16BS* Buffer, UINT32 BufferSize);
+    
+#ifdef __cplusplus
+}
+#endif
+

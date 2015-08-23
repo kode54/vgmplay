@@ -1,5 +1,7 @@
 // Header File for structures and constants used within VGMPlay.c
 
+#include "chips/mamedef.h"
+
 #include "VGMFile.h"
 
 #include "VGMPlay_Intf.h"
