@@ -1346,8 +1346,8 @@ INLINE void SCSP_DoMasterSamples(scsp_state *scsp, stream_sample_t **outputs, in
 
 		//*bufl++ = ICLIP16(smpl>>2);
 		//*bufr++ = ICLIP16(smpr>>2);
-		*bufl++ = smpl;
-		*bufr++ = smpr;
+		*bufl++ = smpl>>3;
+		*bufr++ = smpr>>3;
 	}
 }
 
