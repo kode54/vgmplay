@@ -2703,7 +2703,7 @@ static void Chips_GeneralActions(VGM_PLAYER* p, UINT8 Mode)
 				CAA->ChipType = 0x20;
 
 				ChipClk = GetChipClock(p, (CurChip << 7) | CAA->ChipType, NULL);
-				CAA->SmpRate = device_start_scsp(p->scsp[CurChip], ChipClk, p->ChipOpts[CurChip].SCSP.SpecialFlags);
+				CAA->SmpRate = device_start_scsp(&p->scsp[CurChip], ChipClk, p->ChipOpts[CurChip].SCSP.SpecialFlags);
 				CAA->StreamUpdate = &SCSP_Update;
                 CAA->StreamUpdateParam = p->scsp[CurChip];
 
