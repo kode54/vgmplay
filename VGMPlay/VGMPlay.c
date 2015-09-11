@@ -2344,6 +2344,7 @@ static void Chips_GeneralActions(VGM_PLAYER* p, UINT8 Mode)
 				ChipClk = GetChipClock(p, (CurChip << 7) | CAA->ChipType, NULL);
 				CAA->SmpRate = device_start_ymf271(&p->ymf271[CurChip], ChipClk);
 				CAA->StreamUpdate = &ymf271_update;
+				CAA->StreamUpdateParam = p->ymf271[CurChip];
 
 				CAA->Volume = GetChipVolume(p, CAA->ChipType, CurChip, ChipCnt);
 				AbsVol += CAA->Volume;
