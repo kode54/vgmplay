@@ -4958,6 +4958,9 @@ static void ResampleChipStream(VGM_PLAYER* p, CA_LIST* CLst, WAVE_32BS* RetSampl
 	sample_t ls, rs;
 
 	CAA = CLst->CAud;
+	if (!CAA->Resampler)
+		return;
+    
 	CurBufL = p->StreamBufs[0x00];
 	CurBufR = p->StreamBufs[0x01];
 
