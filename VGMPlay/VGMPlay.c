@@ -1848,7 +1848,7 @@ static UINT16 GetChipVolume(VGM_PLAYER* p, UINT8 ChipID, UINT8 ChipNum, UINT8 Ch
 		0x80, 0x100, 0x100, 0x100, 0x100, 0x100, 0x100, 0x98,			// 08-0F
 		0x80, 0xE0/*0xCD*/, 0x100, 0xC0, 0x100, 0x40, 0x11E, 0x1C0,		// 10-17
 		0x100/*110*/, 0xA0, 0x100, 0x100, 0x100, 0xB3, 0x100, 0x100,	// 18-1F
-		0x100, 0x100, 0x100, 0x100, 0x40, 0x20, 0x100, 0x40,			// 20-27
+		0x20, 0x100, 0x100, 0x100, 0x40, 0x20, 0x100, 0x40,			// 20-27
 		0x280};
 	UINT16 Volume;
 	UINT8 CurChp;
@@ -2695,7 +2695,7 @@ static void Chips_GeneralActions(VGM_PLAYER* p, UINT8 Mode)
 		{
 			p->ChipOpts[0x01].SCSP.SpecialFlags = p->ChipOpts[0x00].SCSP.SpecialFlags;
 
-			//ChipVol = 0x100;
+			//ChipVol = 0x20;
 			ChipCnt = (p->VGMHead.lngHzSCSP & 0x40000000) ? 0x02 : 0x01;
 			for (CurChip = 0x00; CurChip < ChipCnt; CurChip ++)
 			{
@@ -2708,7 +2708,7 @@ static void Chips_GeneralActions(VGM_PLAYER* p, UINT8 Mode)
                 CAA->StreamUpdateParam = p->scsp[CurChip];
 
 				CAA->Volume = GetChipVolume(p, CAA->ChipType, CurChip, ChipCnt);
-				AbsVol += CAA->Volume;
+				AbsVol += CAA->Volume * 8;
 			}
 		}
 		if (p->VGMHead.lngHzWSwan)
