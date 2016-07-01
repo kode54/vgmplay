@@ -42,4 +42,4 @@ libvgmplay.a : $(LIB_OBJS)
 	$(CC) $(CFLAGS) $(OPTS) -o $@ $^
 
 clean:
-	rm -f $(OBJS) $(LIB_OBJS) libvgmplay.a > /dev/null
+	rm -f $(OBJS) $(LIB_OBJS) libvgmplay.a vgm2pcm > /dev/null
