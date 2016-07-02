@@ -3,90 +3,270 @@
 #include <string.h>
 #include <wchar.h>
 
+#include <fcntl.h>
+
+#ifndef _MSC_VER
+// This turns command line options on (using getopt.h) unless you are using MSVC / Visual Studio, which doesn't have it.
+#define VGM2PCM_HAS_GETOPT
+#include <getopt.h>
+#endif
+
 #include "chips/mamedef.h"
 #include "stdbool.h"
 #include "VGMPlay.h"
-#include "VGMPlay_Intf.h"
 
 #define SAMPLESIZE sizeof(WAVE_16BS)
 
 UINT8 CmdList[0x100]; // used by VGMPlay.c and VGMPlay_AddFmts.c
 bool ErrorHappened;   // used by VGMPlay.c and VGMPlay_AddFmts.c
-extern VGM_HEADER VGMHead;
-extern UINT32 SampleRate;
-extern UINT32 VGMMaxLoopM;
-extern UINT32 FadeTime;
-extern bool EndPlay;
+
+enum output_format { L16, WAV, LWAV };
 
 INLINE int fputBE16(UINT16 Value, FILE* hFile)
 {
-    int RetVal;
-    int ResVal;
+	int RetVal;
+	int ResVal;
 
-    RetVal = fputc((Value & 0xFF00) >> 8, hFile);
-    RetVal = fputc((Value & 0x00FF) >> 0, hFile);
-    ResVal = (RetVal != EOF) ? 0x02 : 0x00;
-    return ResVal;
+	RetVal = fputc((Value & 0xFF00) >> 8, hFile);
+	RetVal = fputc((Value & 0x00FF) >> 0, hFile);
+	ResVal = (RetVal != EOF) ? 0x02 : 0x00;
+	return ResVal;
+}
+
+INLINE int fputLE16(UINT16 Value, FILE* hFile)
+{
+	int RetVal;
+	int ResVal;
+
+	RetVal = fputc((Value & 0x00FF) >> 0, hFile);
+	RetVal = fputc((Value & 0xFF00) >> 8, hFile);
+	ResVal = (RetVal != EOF) ? 0x02 : 0x00;
+	return ResVal;
+}
+
+INLINE int fputLE32(UINT32 Value, FILE* hFile)
+{
+	int RetVal;
+	int ResVal;
+
+	RetVal = fputc((Value & 0x000000FF) >> 0, hFile);
+	RetVal = fputc((Value & 0x0000FF00) >> 8, hFile);
+	RetVal = fputc((Value & 0x00FF0000) >> 16, hFile);
+	RetVal = fputc((Value & 0xFF000000) >> 24, hFile);
+	ResVal = (RetVal != EOF) ? 0x02 : 0x00;
+	return ResVal;
+}
+
+void usage(const char *name) {
+	fprintf(stderr, "usage: %s [options] vgm_file pcm_file\n"
+		"pcm_file can be - for standard output.\n", name);
+#ifdef VGM2PCM_HAS_GETOPT
+	fprintf(stderr, "\n"
+		"Default options:\n"
+		"--loop-count 2\n"
+		"--fade-ms 5000\n"
+		"--format L16\n"
+		"\n");
+#endif
 }
 
 int main(int argc, char *argv[]) {
-    UINT8 result;
-    WAVE_16BS *sampleBuffer;
-    UINT32 bufferedLength;
-    void *vgmp;
-    VGM_PLAYER *p;
-    FILE *outputFile;
+	UINT8 result;
+	WAVE_16BS *sampleBuffer;
+	UINT32 bufferedLength;
+	FILE *outputFile;
+	enum output_format outputFormat = L16;
 
-    if (argc < 3) {
-        fputs("usage: vgm2pcm vgm_file pcm_file\n", stderr);
-        return 1;
-    }
+	long int wavRIFFLengthPos = 0;
+	long int wavDataLengthPos = 0;
+	int sampleBytesWritten = 0;
 
-    vgmp = VGMPlay_Init();
-    VGMPlay_Init2(vgmp);
+	void *vgmp;
+	VGM_PLAYER *p;
 
-    if (!OpenVGMFile(vgmp, argv[1])) {
-        fprintf(stderr, "vgm2pcm: error: failed to open vgm_file (%s)\n", argv[1]);
-        return 1;
-    }
+	int c;
 
-    outputFile = fopen(argv[2], "wb");
-    if (outputFile == NULL) {
-        fprintf(stderr, "vgm2pcm: error: failed to open pcm_file (%s)\n", argv[2]);
-        return 1;
-    }
+	// Initialize VGMPlay before parsing arguments, so we can set VGMMaxLoop and FadeTime
+	vgmp = VGMPlay_Init();
+	VGMPlay_Init2(vgmp);
 
-    PlayVGM(vgmp);
+	p = (VGM_PLAYER *) vgmp;
 
-    p = (VGM_PLAYER *) vgmp;
+	p->VGMMaxLoop = 2;
+	p->FadeTime = 5000;
 
-    sampleBuffer = (WAVE_16BS*)malloc(SAMPLESIZE * p->SampleRate);
-    if (sampleBuffer == NULL) {
-        fprintf(stderr, "vgm2pcm: error: failed to allocate %u bytes of memory\n", SAMPLESIZE * SampleRate);
-        return 1;
-    }
+	// Parse command line arguments
+#ifdef VGM2PCM_HAS_GETOPT
+	static struct option long_options[] = {
+		{ "loop-count", required_argument, NULL, 'l' },
+		{ "fade-ms", required_argument, NULL, 'f' },
+		{ "format", required_argument, NULL, 't' },
+		{ "help", no_argument, NULL, '?' },
+		{ NULL, 0, NULL, 0 }
+	};
+	while ((c = getopt_long(argc, argv, "", long_options, NULL)) != -1) {
+		switch (c) {
+		case 'l':
+			c = atoi(optarg);
+			if (c <= 0) {
+				fputs("Error: loop count must be at least 1.\n", stderr);
+				usage(argv[0]);
+				return 1;
+			}
+			p->VGMMaxLoop = c;
+			//fprintf(stderr, "Setting max loops to %u\n", VGMMaxLoop);
+			break;
+		case 'f':
+			p->FadeTime = atoi(optarg);
+			//fprintf(stderr, "Setting fade-out time in milliseconds to %u\n", FadeTime);
+			break;
+		case 't':
+			if (strcasecmp(optarg, "l16") == 0) {
+				outputFormat = L16;
+			} else if (strcasecmp(optarg, "wav") == 0) {
+				outputFormat = WAV;
+			} else if (strcasecmp(optarg, "lwav") == 0) {
+				outputFormat = LWAV;
+			} else {
+				fprintf(stderr, "Invalid output format: %s\n", optarg);
+				return 1;
+			}
+			break;
+		case -1:
+			break;
+		case '?':
+			usage(argv[0]);
+			return 0;
+		default:
+			usage(argv[0]);
+			return 1;
+		}
+	}
 
-    while (!EndPlay) {
-        UINT32 bufferSize = SampleRate;
-        bufferedLength = FillBuffer(vgmp, sampleBuffer, bufferSize);
-        if (bufferedLength) {
-            UINT32 numberOfSamples;
-            UINT32 currentSample;
-            const UINT16* sampleData;
+	// Pretend for the rest of the program that those options don't exist
+	argv[optind - 1] = argv[0];
+	argc -= optind - 1;
+	argv += optind - 1;
+#endif
+	if (argc < 3) {
+		usage(argv[0]);
+		return 1;
+	}
 
-            sampleData = (INT16*)sampleBuffer;
-            numberOfSamples = SAMPLESIZE * bufferedLength / 0x02;
-            for (currentSample = 0x00; currentSample < numberOfSamples; currentSample++) {
-                fputBE16(sampleData[currentSample], outputFile);
-            }
-        }
-    }
+	if (!OpenVGMFile(vgmp, argv[1])) {
+		fprintf(stderr, "vgm2pcm: error: failed to open vgm_file (%s)\n", argv[1]);
+		return 1;
+	}
 
-    StopVGM(vgmp);
+	if (argv[2][0] == '-' && argv[2][1] == '\0') {
+#ifdef O_BINARY
+		setmode(fileno(stdout), O_BINARY);
+#endif
+		outputFile = stdout;
+	} else {
+		outputFile = fopen(argv[2], "wb");
+		if (outputFile == NULL) {
+			fprintf(stderr, "vgm2pcm: error: failed to open pcm_file (%s)\n", argv[2]);
+			return 1;
+		}
+	}
 
-    CloseVGMFile(vgmp);
+	if (outputFormat == LWAV && p->VGMHead.lngLoopSamples == 0) {
+		outputFormat = WAV;
+	}
 
-    VGMPlay_Deinit(vgmp);
+	if (outputFormat == WAV || outputFormat == LWAV) {
+		fwrite("RIFF", 1, 4, outputFile);
 
-    return 0;
+		wavRIFFLengthPos = ftell(outputFile);
+		fputLE32(-1, outputFile);
+
+		fwrite("WAVE", 1, 4, outputFile);
+
+		fwrite("fmt ", 1, 4, outputFile);
+		fputLE32(16, outputFile);
+		fputLE16(1, outputFile);
+		fputLE16(2, outputFile);
+		fputLE32(p->SampleRate, outputFile);
+		fputLE32(p->SampleRate * 2 * 2, outputFile);
+		fputLE16(2 * 2, outputFile);
+		fputLE16(16, outputFile);
+
+		if (outputFormat == LWAV) {
+			fwrite("smpl", 1, 4, outputFile);
+			fputLE32(60, outputFile);
+			fputLE32(0, outputFile);
+			fputLE32(0, outputFile);
+			fputLE32(0, outputFile);
+			fputLE32(0, outputFile);
+			fputLE32(0, outputFile);
+			fputLE32(0, outputFile);
+			fputLE32(0, outputFile);
+			fputLE32(1, outputFile);
+			fputLE32(0, outputFile);
+
+			fputLE32(0, outputFile);
+			fputLE32(0, outputFile);
+			fputLE32(p->VGMHead.lngTotalSamples - p->VGMHead.lngLoopSamples, outputFile);
+			fputLE32(p->VGMHead.lngTotalSamples, outputFile);
+			fputLE32(0, outputFile);
+			fputLE32(0, outputFile);
+		}
+
+		fwrite("data", 1, 4, outputFile);
+
+		wavDataLengthPos = ftell(outputFile);
+		fputLE32(-1, outputFile);
+	}
+
+	PlayVGM(vgmp);
+
+	sampleBuffer = (WAVE_16BS*)malloc(SAMPLESIZE * p->SampleRate);
+	if (sampleBuffer == NULL) {
+		fprintf(stderr, "vgm2pcm: error: failed to allocate %lu bytes of memory\n", SAMPLESIZE * p->SampleRate);
+		return 1;
+	}
+
+	while (!p->EndPlay) {
+		UINT32 bufferSize = p->SampleRate;
+		bufferedLength = FillBuffer(vgmp, sampleBuffer, bufferSize);
+		if (bufferedLength) {
+			UINT32 numberOfSamples;
+			UINT32 currentSample;
+			const UINT16* sampleData;
+
+			sampleData = (const UINT16*)sampleBuffer;
+			numberOfSamples = SAMPLESIZE * bufferedLength / 0x02;
+			for (currentSample = 0x00; currentSample < numberOfSamples; currentSample++) {
+				if (outputFormat == L16) {
+					fputBE16(sampleData[currentSample], outputFile);
+				} else {
+					fputLE16(sampleData[currentSample], outputFile);
+					sampleBytesWritten += 2;
+				}
+			}
+		}
+	}
+
+	fflush(outputFile);
+	StopVGM(vgmp);
+
+	CloseVGMFile(vgmp);
+
+	VGMPlay_Deinit(vgmp);
+
+	if (wavRIFFLengthPos > 0) {
+		fseek(outputFile, wavRIFFLengthPos, SEEK_SET);
+		if (outputFormat == LWAV) {
+			fputLE32(sampleBytesWritten + 28 + 68 + 8, outputFile);
+		} else {
+			fputLE32(sampleBytesWritten + 28 + 8, outputFile);
+		}
+	}
+	if (wavDataLengthPos > 0) {
+		fseek(outputFile, wavDataLengthPos, SEEK_SET);
+		fputLE32(sampleBytesWritten, outputFile);
+	}
+
+	return 0;
 }

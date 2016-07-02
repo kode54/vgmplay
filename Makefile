@@ -1,6 +1,6 @@
 CFLAGS = -c
 
-OBJS = VGMPlay/vgm2pcm.o
+OBJS = VGMPlay/vgm2wav.o
 
 LIB_OBJS = VGMPlay/ChipMapper.o VGMPlay/VGMPlay.o VGMPlay/chips/2151intf.o\
 	VGMPlay/chips/2203intf.o VGMPlay/chips/2413intf.o VGMPlay/chips/2608intf.o\
@@ -30,9 +30,9 @@ LIB_OBJS = VGMPlay/ChipMapper.o VGMPlay/VGMPlay.o VGMPlay/chips/2151intf.o\
 
 OPTS = -O2
 
-all: libvgmplay.a vgm2pcm
+all: libvgmplay.a vgm2wav
 
-vgm2pcm: $(OBJS) libvgmplay.a
+vgm2wav: $(OBJS) libvgmplay.a
 	$(CC) $(OPTS) -o $@ $^ -lz
 
 libvgmplay.a : $(LIB_OBJS)
@@ -42,4 +42,4 @@ libvgmplay.a : $(LIB_OBJS)
 	$(CC) $(CFLAGS) $(OPTS) -o $@ $^
 
 clean:
-	rm -f $(OBJS) $(LIB_OBJS) libvgmplay.a vgm2pcm > /dev/null
+	rm -f $(OBJS) $(LIB_OBJS) libvgmplay.a vgm2wav > /dev/null

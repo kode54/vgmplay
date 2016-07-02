@@ -29,3 +29,4 @@ Desktop.ini
 *.o
 libvgmplay.a
 vgm2pcm
+vgm2wav
