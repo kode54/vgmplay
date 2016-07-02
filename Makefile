@@ -19,7 +19,7 @@ LIB_OBJS = VGMPlay/ChipMapper.o VGMPlay/VGMPlay.o VGMPlay/chips/2151intf.o\
 	VGMPlay/chips/okim6295.o VGMPlay/chips/Ootake_PSG.o	VGMPlay/chips/panning.o\
 	VGMPlay/chips/pokey.o VGMPlay/chips/pwm.o VGMPlay/chips/qsound.o\
 	VGMPlay/chips/rf5c68.o VGMPlay/chips/saa1099.o VGMPlay/chips/scd_pcm.o\
-	VGMPlay/chips/scsp.o VGMPlay/chips/scspdsp.o VGMPlay/chips/segapcm.o\
+	VGMPlay/chips/scsp.o VGMPlay/chips/yam.o VGMPlay/chips/segapcm.o\
 	VGMPlay/chips/sn76489.o VGMPlay/chips/sn76496.o\
 	VGMPlay/chips/sn764intf.o VGMPlay/chips/upd7759.o VGMPlay/chips/vsu.o\
 	VGMPlay/chips/ws_audio.o VGMPlay/chips/x1_010.o VGMPlay/chips/ym2151.o\

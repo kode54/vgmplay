@@ -122,7 +122,7 @@ EMUOBJS = \
 	$(EMUOBJ)/segapcm.o \
 	$(EMUOBJ)/scd_pcm.o \
 	$(EMUOBJ)/scsp.o \
-	$(EMUOBJ)/scspdsp.o \
+	$(EMUOBJ)/yam.o \
 	$(EMUOBJ)/sn76489.o \
 	$(EMUOBJ)/sn76496.o \
 	$(EMUOBJ)/sn764intf.o \
