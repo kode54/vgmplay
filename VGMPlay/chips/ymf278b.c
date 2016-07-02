@@ -70,7 +70,9 @@
 #include "ymf262.h"
 #include "ymf278b.h"
 
+#ifndef NULL
 #define NULL	((void *)0)
+#endif
 
 typedef struct
 {

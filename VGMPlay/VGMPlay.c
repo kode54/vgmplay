@@ -109,7 +109,7 @@ INLINE INT32 SampleVGM2Pbk_I(VGM_PLAYER*, INT32 SampleVal);	// inline functions
 INLINE INT32 SamplePbk2VGM_I(VGM_PLAYER*, INT32 SampleVal);
 //INT32 SampleVGM2Playback(void*, INT32 SampleVal);		// non-inline functions
 //INT32 SamplePlayback2VGM(void*, INT32 SampleVal);
-static bool SetMuteControl(VGM_PLAYER*, bool mute);
+//static bool SetMuteControl(VGM_PLAYER*, bool mute);
 
 static void InterpretFile(VGM_PLAYER*, UINT32 SampleCount);
 static void AddPCMData(VGM_PLAYER*, UINT8 Type, UINT32 DataSize, const UINT8* Data);
@@ -381,8 +381,8 @@ static UINT32 gcd(UINT32 x, UINT32 y)
 
 void PlayVGM(void *_p)
 {
-	UINT8 CurChip;
-	UINT8 FMVal;
+	/*UINT8 CurChip;*/
+	/*UINT8 FMVal;*/
 	INT32 TempSLng;
 
     VGM_PLAYER* p = (VGM_PLAYER*)_p;
@@ -1416,7 +1416,7 @@ UINT32 CalcSampleMSecExt(void *_p, UINT64 Value, UINT8 Mode, VGM_HEADER* FileHea
 	return RetVal;
 }
 
-static UINT32 EncryptChipName(void* DstBuf, const void* SrcBuf, UINT32 Length)
+/*static UINT32 EncryptChipName(void* DstBuf, const void* SrcBuf, UINT32 Length)
 {
 	// using nineko's awesome encryption algorithm
 	// http://forums.sonicretro.org/index.php?showtopic=25300
@@ -1446,7 +1446,7 @@ static UINT32 EncryptChipName(void* DstBuf, const void* SrcBuf, UINT32 Length)
 	}
 
 	return Length;
-}
+}*/
 
 const char* GetChipName(UINT8 ChipID)
 {
@@ -1856,7 +1856,7 @@ static UINT16 GetChipVolume(VGM_PLAYER* p, UINT8 ChipID, UINT8 ChipNum, UINT8 Ch
 	VGMX_CHP_EXTRA16* TempCX;
 	VGMX_CHIP_DATA16* TempCD;
 
-    VGM_HEADER* FileHead = &p->VGMHead;
+    /*VGM_HEADER* FileHead = &p->VGMHead;*/
 
 	Volume = CHIP_VOLS[ChipID & 0x7F];
 	switch(ChipID)
@@ -3306,7 +3306,7 @@ INT32 SamplePlayback2VGM(void* _p, INT32 SampleVal)
 
 static void InterpretFile(VGM_PLAYER* p, UINT32 SampleCount)
 {
-	UINT32 TempLng;
+	/*UINT32 TempLng;*/
 	UINT8 CurChip;
 
 	if (p->DacCtrlUsed && SampleCount > 1)	// handle skipping
@@ -4804,7 +4804,7 @@ static void GeneralChipLists(VGM_PLAYER* p)
 	UINT16 CurBufIdx;
 	CA_LIST* CLstOld;
 	CA_LIST* CLst;
-	CA_LIST* CurLst;
+	/*CA_LIST* CurLst;*/
 	UINT8 CurChip;
 	UINT8 CurCSet;
 	CAUD_ATTR* CAA;

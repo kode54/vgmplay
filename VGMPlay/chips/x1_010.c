@@ -150,10 +150,12 @@ void seta_update(void *param, stream_sample_t **outputs, int samples)
 				if( freq == 0 ) freq = 4;
 				smp_step = (UINT32)((float)info->base_clock/8192.0
 							*freq*(1<<FREQ_BASE_BITS)/(float)info->rate);
+#ifdef _DEBUG
 				if( smp_offs == 0 ) {
 					LOG_SOUND(( "Play sample %p - %p, channel %X volume %d:%d freq %X step %X offset %X\n",
 						start, end, ch, volL, volR, freq, smp_step, smp_offs ));
 				}
+#endif
 				for( i = 0; i < samples; i++ ) {
 					delta = smp_offs>>FREQ_BASE_BITS;
 					// sample ended?
@@ -177,10 +179,12 @@ void seta_update(void *param, stream_sample_t **outputs, int samples)
 				env_offs = info->env_offset[ch];
 				env_step = (UINT32)((float)info->base_clock/128.0/1024.0/4.0*reg->start*(1<<ENV_BASE_BITS)/(float)info->rate);
 				/* Print some more debug info */
+#ifdef _DEBUG
 				if( smp_offs == 0 ) {
 					LOG_SOUND(( "Play waveform %X, channel %X volume %X freq %4X step %X offset %X\n",
 						reg->volume, ch, reg->end, freq, smp_step, smp_offs ));
 				}
+#endif
 				for( i = 0; i < samples; i++ ) {
 					int vol;
 					delta = env_offs>>ENV_BASE_BITS;

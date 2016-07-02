@@ -213,7 +213,9 @@ UINT8 irem_ga20_r(void *_info, offs_t offset)
 			return chip->channel[channel].play ? 1 : 0;
 
 		default:
+#ifdef _DEBUG
 			logerror("GA20: read unk. register %d, channel %d\n", offset & 0xf, channel);
+#endif
 			break;
 	}
 

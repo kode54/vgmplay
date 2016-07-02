@@ -51,7 +51,7 @@ struct _ym3526_state
 /* IRQ Handler */
 static void IRQHandler(void *param,int irq)
 {
-	ym3526_state *info = (ym3526_state *)param;
+	//ym3526_state *info = (ym3526_state *)param;
 	//if (info->intf->handler) (info->intf->handler)(info->device, irq ? ASSERT_LINE : CLEAR_LINE);
 	//if (info->intf->handler) (info->intf->handler)(irq ? ASSERT_LINE : CLEAR_LINE);
 }
@@ -70,7 +70,7 @@ static TIMER_CALLBACK( timer_callback_1 )
 //static void TimerHandler(void *param,int c,attotime period)
 static void TimerHandler(void *param,int c,int period)
 {
-	ym3526_state *info = (ym3526_state *)param;
+	//ym3526_state *info = (ym3526_state *)param;
 	//if( attotime_compare(period, attotime_zero) == 0 )
 	if( period == 0 )
 	{	/* Reset FM Timer */

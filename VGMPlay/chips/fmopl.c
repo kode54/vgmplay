@@ -81,7 +81,9 @@ Revision History:
 #endif
 
 
+#ifndef NULL
 #define NULL	((void *)0)
+#endif
 
 
 /* output final shift */

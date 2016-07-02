@@ -3965,12 +3965,16 @@ void ym2610_update_one(void *chip, FMSAMPLE **buffer, int length)
 	/* Check YM2610B warning message */
 	if( FM_KEY_IS(&F2610->CH[0].SLOT[3]) )
 	{
+#ifdef _DEBUG
 		LOG(LOG_WAR,(FM_MSG_YM2610B,F2610->OPN.ST.param,0));
+#endif
 		FM_KEY_IS(&F2610->CH[0].SLOT[3]) = 0;
 	}
 	if( FM_KEY_IS(&F2610->CH[3].SLOT[3]) )
 	{
+#ifdef _DEBUG
 		LOG(LOG_WAR,(FM_MSG_YM2610B,F2610->OPN.ST.param,3));
+#endif
 		FM_KEY_IS(&F2610->CH[3].SLOT[3]) = 0;
 	}
 #endif

@@ -10,7 +10,9 @@
 #include "rf5c68.h"
 #include <math.h>
 
+#ifndef NULL
 #define NULL	((void *)0)
+#endif
 
 
 #define  NUM_CHANNELS    (8)

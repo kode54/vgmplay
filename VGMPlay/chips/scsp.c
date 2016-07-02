@@ -268,7 +268,7 @@ static const float SDLT[8]={-1000000.0f,-36.0f,-30.0f,-24.0f,-18.0f,-12.0f,-6.0f
 	return (scsp_state *)downcast<legacy_device_base *>(device)->token();
 }*/
 
-static unsigned char DecodeSCI(scsp_state *scsp,unsigned char irq)
+/*static unsigned char DecodeSCI(scsp_state *scsp,unsigned char irq)
 {
 	unsigned char SCI=0;
 	unsigned char v;
@@ -279,7 +279,7 @@ static unsigned char DecodeSCI(scsp_state *scsp,unsigned char irq)
 	v=(SCILV2((scsp))&(1<<irq))?1:0;
 	SCI|=v<<2;
 	return SCI;
-}
+}*/
 
 /*static void CheckPendingIRQ(scsp_state *scsp)
 {
@@ -1072,7 +1072,9 @@ INLINE unsigned short SCSP_r16(scsp_state *scsp, unsigned int addr)
 			Kyuutenkai reads from 0xee0/0xee2, it's tied with EXTS register(s) also used for CD-Rom Player equalizer.
 			This port is actually an external parallel port, directly connected from the CD Block device, hence code is a bit of an hack.
 			*/
+#ifdef _DEBUG
 			logerror("SCSP: Reading from EXTS register %08x\n",addr);
+#endif
 			//if(addr == 0xee0)
 			//	v = space.machine().device<cdda_device>("cdda")->get_channel_volume(0);
 			//if(addr == 0xee2)

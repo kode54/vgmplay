@@ -45,7 +45,9 @@ to do:
 //#include "sndintrf.h"
 #include "ym2413.h"
 
+#ifndef NULL
 #define NULL	((void *)0)
+#endif
 
 /* output final shift */
 #if (SAMPLE_BITS==16)

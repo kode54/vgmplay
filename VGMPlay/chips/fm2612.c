@@ -135,7 +135,9 @@
 #include "mamedef.h"
 #include "fm.h"
 
+#ifndef NULL
 #define NULL	((void *)0)
+#endif
 
 /* shared function building option */
 #define BUILD_OPN (BUILD_YM2203||BUILD_YM2608||BUILD_YM2610||BUILD_YM2610B||BUILD_YM2612||BUILD_YM3438)

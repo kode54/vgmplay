@@ -1,4 +1,4 @@
-CFLAGS = -c
+CFLAGS = -c -Wall
 
 OBJS = VGMPlay/vgm2wav.o
 

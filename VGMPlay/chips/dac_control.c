@@ -57,7 +57,9 @@ typedef struct _dac_control
 	UINT32 SampleRate;
 } dac_control;
 
+#ifndef NULL
 #define NULL	(void*)0
+#endif
 
 INLINE void daccontrol_SendCommand(dac_control *chip)
 {

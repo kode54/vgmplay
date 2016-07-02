@@ -128,7 +128,9 @@
 #include <stdlib.h>
 #include "sn76496.h"
 
+#ifndef NULL
 #define NULL	((void *)0)
+#endif
 
 
 //#define MAX_OUTPUT 0x7fff
@@ -870,7 +872,7 @@ DEVICE_GET_INFO( smsiii )
 		case DEVINFO_STR_NAME:							strcpy(info->s, "SMSIII PSG");					break;
 		default:										DEVICE_GET_INFO_CALL(sn76496);						break;
 	}
-}
+}*/
 
 
 /*DEFINE_LEGACY_SOUND_DEVICE(SN76496, sn76496);

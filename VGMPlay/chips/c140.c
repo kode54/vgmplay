@@ -49,7 +49,9 @@ Unmapped registers:
 #include "mamedef.h"
 #include "c140.h"
 
+#ifndef NULL
 #define NULL	((void *)0)
+#endif
 
 #define MAX_VOICE 24
 

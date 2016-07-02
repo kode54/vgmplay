@@ -852,7 +852,9 @@ static void generate_samples(es5506_state *chip, INT32 **outputs, int offset, in
 		/* does this voice have it's IRQ bit raised? */
 		if (voice->control&CONTROL_IRQ)
 		{
+#ifdef _DEBUG
 			logerror("es5506: IRQ raised on voice %d!!\n",v);
+#endif
 			/* only update voice vector if existing IRQ is acked by host */
 			if (chip->irqv&0x80)
 			{
@@ -2141,7 +2143,9 @@ INLINE UINT16 es5505_reg_read_high(es5506_state *chip, es5506_voice *voice, offs
 			if ((voice->control & CONTROL_STOPMASK) && chip->region_base[voice->control >> 14])
 			{
 				voice->o1n1 = chip->region_base[voice->control >> 14][voice->exbank + (voice->accum >> 11)];
+#ifdef _DEBUG
 				logerror("%02x %08x ==> %08x\n",voice->o1n1,voice->control >> 14,voice->exbank + (voice->accum >> 11));
+#endif
 			}
 			result = voice->o1n1;
 			break;

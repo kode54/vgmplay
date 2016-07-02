@@ -803,7 +803,7 @@ PSG_Write(
 	Uint32		regNum,
 	Uint8		data)
 {
-	huc6280_state* info = (huc6280_state*)chip;
+	//huc6280_state* info = (huc6280_state*)chip;
 	
 	//v1.10更新。キュー処理をここに統合して高速化。
 	//Kitao更新。clockは考慮せずにシンプルにして高速化した。
