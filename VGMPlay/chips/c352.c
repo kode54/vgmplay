@@ -130,7 +130,7 @@ void C352_fetch_sample(C352 *c, int i)
         s = (INT8)c->wave[v->pos&0xffffff];
 
         if(v->flags & C352_FLG_MULAW)
-            v->sample = c->mulaw[(uint8_t)s];
+            v->sample = c->mulaw[(UINT8)s];
         else
             v->sample = s<<8;
         
