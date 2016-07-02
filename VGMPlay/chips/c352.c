@@ -230,7 +230,7 @@ void c352_update(void *_info, stream_sample_t **outputs, int samples)
 int device_start_c352(void **_info, int clock, int clkdiv)
 {
     C352 *c = calloc(1, sizeof(C352));
-    *_info = (void *) _info;
+    *_info = (void *) c;
 
     c->wave = NULL;
     c->wavesize = 0x00;
