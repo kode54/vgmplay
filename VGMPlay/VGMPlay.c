@@ -659,6 +659,12 @@ static UINT32 VGMF_gzgetsize(VGM_FILE* hFile)
 	VGM_FILE_gz* File = (VGM_FILE_gz *)hFile;
 	return File->Size;
 }
+
+static UINT32 VGMF_gztell(VGM_FILE* hFile)
+{
+	VGM_FILE_gz* File = (VGM_FILE_gz *)hFile;
+	return gztell(File->hFile);
+}
 #endif
 
 bool OpenVGMFile(void *_p, const char* FileName)
@@ -683,6 +689,7 @@ bool OpenVGMFile(void *_p, const char* FileName)
 	vgmFile.vf.Read = VGMF_gzread;
 	vgmFile.vf.Seek = VGMF_gzseek;
 	vgmFile.vf.GetSize = VGMF_gzgetsize;
+	vgmFile.vf.Tell = VGMF_gztell;
 	vgmFile.hFile = hFile;
 	vgmFile.Size = FileSize;
 
@@ -729,6 +736,7 @@ bool OpenVGMFileW(void *_p, const wchar_t* FileName)
 	vgmFile.vf.Read = VGMF_gzread;
 	vgmFile.vf.Seek = VGMF_gzseek;
 	vgmFile.vf.GetSize = VGMF_gzgetsize;
+	vgmFile.vf.Tell = VGMF_gztell;
 	vgmFile.hFile = hFile;
 	vgmFile.Size = FileSize;
 
@@ -765,6 +773,12 @@ static bool OpenVGMFile_Internal(VGM_PLAYER* p, VGM_FILE* hFile, UINT32 FileSize
 
 	hFile->Seek(hFile, 0x00);
 	ReadVGMHeader(hFile, &p->VGMHead);
+	if (p->VGMHead.fccVGM != FCC_VGM)
+	{
+		printf("VGM signature matched on the first read, but not on the second one!\n");
+		printf("This is a known zlib bug where gzseek fails. Please install a fixed zlib.\n");
+		return false;
+	}
 
 	p->VGMSampleRate = 44100;
 	if (! p->VGMDataLen)
@@ -1172,7 +1186,8 @@ static wchar_t* ReadWStrFromFile(VGM_FILE* hFile, UINT32* FilePos, UINT32 EOFPos
 	if (TextStr == NULL)
 		return NULL;
 
-	hFile->Seek(hFile, CurPos);
+	if (hFile->Tell(hFile) != CurPos)
+		hFile->Seek(hFile, CurPos);
 	TempStr = TextStr - 1;
 	StrLen = 0x00;
 	do
@@ -1294,6 +1309,12 @@ static UINT32 GetVGMFileInfo_Internal(VGM_FILE* hFile, UINT32 FileSize,
 
 	hFile->Seek(hFile, 0x00);
 	ReadVGMHeader(hFile, &TempHead);
+	if (TempHead.fccVGM != FCC_VGM)
+	{
+		printf("VGM signature matched on the first read, but not on the second one!\n");
+		printf("This is a known zlib bug where gzseek fails. Please install a fixed zlib.\n");
+		return 0x00;
+	}
 
 	if (! TempHead.lngEOFOffset || TempHead.lngEOFOffset > FileSize)
 		TempHead.lngEOFOffset = FileSize;
