@@ -470,7 +470,7 @@ static void ReadIntoBitfield2(const char* Section, const char* Key, UINT16* Valu
 
 	BitMask = (1 << BitCount) - 1;
 
-	NewBits = *Value >> BitStart;	// read old bits, making them the default data
+	NewBits = (*Value >> BitStart) & BitMask;	// read old bits, making them the default data
 	ReadIni_SIntSht(Section, Key, &NewBits);	// read .ini
 
 	*Value &= ~(BitMask << BitStart);			// clear bit range
