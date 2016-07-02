@@ -156,6 +156,7 @@ void * VGMPlay_Init(void)
 	p->SampleRate = 44100;
 	p->FadeTime = 5000;
 
+	p->HardStopOldVGMs = 0x00;
 	p->FadeRAWLog = false;
 	p->VolumeLevel = 1.0f;
 	//p->FullBufFill = false;
@@ -4029,6 +4030,14 @@ static void InterpretVGM(VGM_PLAYER* p, UINT32 SampleCount)
 #endif
 						p->VGMHead.lngTotalSamples = p->VGMSmplPos;
 					}
+					
+					if (p->HardStopOldVGMs)
+					{
+						if (p->VGMHead.lngVersion < 0x150 ||
+							(p->VGMHead.lngVersion == 0x150 && p->HardStopOldVGMs == 0x02))
+						Chips_GeneralActions(p, 0x01); // reset all chips, for instant silence
+					}
+
 					p->VGMEnd = true;
 					break;
 				}

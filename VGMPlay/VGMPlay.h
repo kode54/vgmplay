@@ -179,6 +179,7 @@ typedef struct vgm_player
 
     float VolumeLevel;
     bool SurroundSound;
+    UINT8 HardStopOldVGMs;
     bool FadeRAWLog;
     //bool FullBufFill;	// Fill Buffer until it's full
 
