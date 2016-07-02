@@ -14,6 +14,18 @@
 
 #include "ChipMapper.h"
 
+// To finish filling out later
+UINT8 chip_reg_read(void *param, UINT8 ChipType, UINT8 ChipID, UINT8 Port, UINT8 Offset)
+{
+	VGM_PLAYER* p = (VGM_PLAYER *) param;
+	switch(ChipType)
+	{
+	case 0x1B:	// HuC6280
+		return c6280_r(p->huc6280[ChipID], Offset);
+	}
+	return 0;
+}
+
 void chip_reg_write(void *param, UINT8 ChipType, UINT8 ChipID,
 					UINT8 Port, UINT8 Offset, UINT8 Data)
 {
