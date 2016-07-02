@@ -73,7 +73,7 @@ Revision History:
 #include <stdio.h>
 #endif
 #include <stdlib.h>
-#include <memory.h>
+#include <string.h>
 //#include "sndintrf.h"
 #include "fmopl.h"
 #if BUILD_Y8950

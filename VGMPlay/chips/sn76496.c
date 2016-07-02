@@ -124,7 +124,7 @@
 #endif
 //#include "emu.h"
 //#include "streams.h"
-#include <memory.h>
+#include <string.h>
 #include <stdlib.h>
 #include "sn76496.h"
 

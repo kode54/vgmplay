@@ -20,7 +20,7 @@
 //#include "streams.h"
 #include <math.h>
 #include <stdlib.h>
-#include <memory.h>
+#include <string.h>
 #include <stddef.h>    // for NULL
 #include "mamedef.h"
 #include "c352.h"

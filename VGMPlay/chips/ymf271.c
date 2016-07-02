@@ -34,7 +34,7 @@
 #include <stdio.h>
 #endif
 #include <stdlib.h>
-#include <memory.h>
+#include <string.h>
 #include "ymf271.h"
 
 #ifndef __cplusplus	// C++ already has the bool-type

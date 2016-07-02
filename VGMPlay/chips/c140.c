@@ -45,7 +45,7 @@ Unmapped registers:
 
 //#include "emu.h"
 #include <stdlib.h>
-#include <memory.h>
+#include <string.h>
 #include "mamedef.h"
 #include "c140.h"
 

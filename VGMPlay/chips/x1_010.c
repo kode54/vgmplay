@@ -50,7 +50,7 @@ Registers:
 
 //#include "emu.h"
 #include <stdlib.h>
-#include <memory.h>
+#include <string.h>
 #include <stddef.h>	// for NULL
 #include "mamedef.h"
 #include "x1_010.h"

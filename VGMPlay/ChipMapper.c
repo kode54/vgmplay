@@ -1,7 +1,7 @@
 // ChipMapper.c - Handles Chip Write (including OPL Hardware Support)
 
 #include <stdio.h>
-#include <memory.h>
+#include <string.h>
 #include <math.h>
 #include <wchar.h>
 #include "stdbool.h"

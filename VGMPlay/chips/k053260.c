@@ -10,7 +10,7 @@
 #include <stdio.h>
 #endif
 #include <stdlib.h>
-#include <memory.h>
+#include <string.h>
 #include "k053260.h"
 
 #define NULL	((void *)0)

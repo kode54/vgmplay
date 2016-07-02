@@ -41,7 +41,7 @@ to do:
 #include <math.h>
 #include "mamedef.h"
 #include <stdlib.h>
-#include <memory.h>
+#include <string.h>
 //#include "sndintrf.h"
 #include "ym2413.h"
 

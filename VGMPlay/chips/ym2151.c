@@ -9,7 +9,7 @@
 
 #include "mamedef.h"
 #include <stdlib.h>
-#include <memory.h>
+#include <string.h>
 //#include "sndintrf.h"
 //#include "streams.h"
 #include "ym2151.h"

@@ -26,7 +26,7 @@
 //#include "fm.h"
 #include "fmopl.h"
 
-#include <memory.h>
+#include <string.h>
 
 #define NULL	((void *)0)
 

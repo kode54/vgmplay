@@ -36,7 +36,7 @@
 #ifdef _DEBUG
 #include <stdio.h>
 #endif
-#include <memory.h>
+#include <string.h>
 #include <stdlib.h>
 #include "ymz280b.h"
 

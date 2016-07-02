@@ -102,7 +102,7 @@
 #ifdef _DEBUG
 #include <stdio.h>
 #endif
-#include <memory.h>
+#include <string.h>
 #include <stdlib.h>
 #include "mamedef.h"
 #include "upd7759.h"

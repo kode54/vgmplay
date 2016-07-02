@@ -130,7 +130,7 @@
 
 //#include "emu.h"
 #include <stdlib.h>
-#include <memory.h>
+#include <string.h>
 #include <math.h>
 #include "mamedef.h"
 #include "fm.h"

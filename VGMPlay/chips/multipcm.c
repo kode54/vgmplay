@@ -35,7 +35,7 @@
 //#include "streams.h"
 #include "mamedef.h"
 #include <math.h>
-#include <memory.h>
+#include <string.h>
 #include <stdlib.h>
 #include "multipcm.h"
 

@@ -25,7 +25,7 @@
 #include "3526intf.h"
 #include "fmopl.h"
 
-#include <memory.h>
+#include <string.h>
 
 typedef struct _ym3526_state ym3526_state;
 struct _ym3526_state

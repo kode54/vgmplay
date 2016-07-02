@@ -117,7 +117,7 @@ has twice the steps, happening twice as fast.
 //#include "cpuintrf.h"
 //#include "cpuexec.h"
 #include <stdlib.h>
-#include <memory.h>
+#include <string.h>
 #include <stdio.h>
 #include "ay8910.h"
 

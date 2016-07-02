@@ -16,7 +16,7 @@
 * NOTES
 *
 ******************************************************************************/
-#include <memory.h>
+#include <string.h>
 
 #include <stdlib.h>
 #include "mamedef.h"
