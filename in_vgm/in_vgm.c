@@ -430,6 +430,7 @@ void LoadConfigurationFile(void)
 
 	// NES
 	ChipName = GetChipName(0x14);	TempCOpt = &p->ChipOpts[0x00].NES;
+	TempCOpt->SpecialFlags &= 0x7FFF;
 	sprintf(TempStr, "%s Shared Opts", ChipName);
 	ReadIntoBitfield2("ChipOpts", TempStr, &TempCOpt->SpecialFlags, 0, 2);
 
