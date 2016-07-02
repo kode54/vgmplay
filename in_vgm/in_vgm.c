@@ -308,6 +308,7 @@ void LoadConfigurationFile(void)
 	// -- set default values --
 	// VGMPlay_Init() already sets most default values
 	Options.ImmediateUpdate = false;
+	Options.NoInfoCache = false;
 
 	Options.SampleRate = 44100;
 
@@ -328,6 +329,7 @@ void LoadConfigurationFile(void)
 
 	// Read actual options
 	ReadIni_Boolean ("General",		"ImmdtUpdate",	&Options.ImmediateUpdate);
+	ReadIni_Boolean ("General",		"NoInfoCache",	&Options.NoInfoCache);
 
 	ReadIni_Integer	("Playback",	"SampleRate",	&Options.SampleRate);
 	ReadIni_Integer	("Playback",	"FadeTime",		&p->FadeTime);
@@ -491,6 +493,7 @@ void SaveConfigurationFile(void)
 	VGM_PLAYER* p = (VGM_PLAYER*)vgmp;
 
 	WriteIni_Boolean("General",		"ImmdtUpdate",	Options.ImmediateUpdate);
+	WriteIni_Boolean("General",		"NoInfoCache",	Options.NoInfoCache);
 
 	WriteIni_Integer("Playback",	"SampleRate",	Options.SampleRate);
 	WriteIni_Integer("Playback",	"FadeTime",		FadeTime);
