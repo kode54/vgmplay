@@ -443,7 +443,7 @@ void LoadConfigurationFile(void)
 	ReadIntoBitfield2("ChipOpts", TempStr, &TempCOpt->SpecialFlags, 12, 1);
 
 	// OKIM6258
-	ChipName = GetChipName(0x20);	TempCOpt = &p->ChipOpts[0x00].OKIM6258;
+	ChipName = GetChipName(0x17);	TempCOpt = &p->ChipOpts[0x00].OKIM6258;
 	sprintf(TempStr, "%s Internal 10bit", ChipName);
 	ReadIntoBitfield2("ChipOpts", TempStr, &TempCOpt->SpecialFlags, 0, 1);
 
@@ -612,7 +612,7 @@ void SaveConfigurationFile(void)
 	WriteFromBitfield("ChipOpts", TempStr, TempCOpt->SpecialFlags, 12, 1);
 
 	// OKIM6258
-	ChipName = GetChipName(0x20);	TempCOpt = &p->ChipOpts[0x00].OKIM6258;
+	ChipName = GetChipName(0x17);	TempCOpt = &p->ChipOpts[0x00].OKIM6258;
 	sprintf(TempStr, "%s Internal 10bit", ChipName);
 	WriteFromBitfield("ChipOpts", TempStr, TempCOpt->SpecialFlags, 0, 1);
 
